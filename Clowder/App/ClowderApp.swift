@@ -2,11 +2,12 @@ import SwiftUI
 
 @main
 struct ClowderApp: App {
-    @State private var model = ClanModel()
+    @State private var model = AppModel()
 
     var body: some Scene {
         WindowGroup {
-            CatGridView(model: model)
+            RootView()
+                .environment(model)
         }
     }
 }

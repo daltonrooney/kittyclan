@@ -17,7 +17,7 @@ enum CatAge: String, Codable, CaseIterable, Sendable {
         case .youngAdult: 12...47
         case .adult: 48...95
         case .seniorAdult: 96...119
-        case .senior: 120...300
+        case .senior: 120...Int.max
         }
     }
 

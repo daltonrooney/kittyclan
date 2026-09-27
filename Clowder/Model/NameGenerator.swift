@@ -21,6 +21,10 @@ struct NameGenerator: Sendable {
         let animal_prefixes: [String]
         let animal_suffixes: [String]
         let inappropriate_names: [String]
+        let clan_prefixes: [String]
+        let silly_names: [String]
+        let human_names: [String]
+        let loner_names: [String]
     }
 
     private let lists: Lists
@@ -70,15 +74,33 @@ struct NameGenerator: Sendable {
         return CatName(prefix: prefix, suffix: pick(lists.normal_suffixes, &rng))
     }
 
-    /// The name shown for a cat of this age: kits and apprentices get special endings.
-    func display(_ name: CatName, age: CatAge) -> String {
-        let rank: String? = switch age {
+    /// The name shown for a cat of this rank: kits, apprentices and the leader get special endings.
+    func display(_ name: CatName, rank: Rank) -> String {
+        let key: String? = switch rank {
         case .newborn: "newborn"
         case .kitten: "kitten"
-        case .adolescent: "apprentice"
+        case .apprentice: "apprentice"
+        case .medicineApprentice: "medicine cat apprentice"
+        case .leader: "leader"
         default: nil
         }
-        return name.prefix + (rank.flatMap { lists.special_suffixes[$0] } ?? name.suffix)
+        return name.prefix + (key.flatMap { lists.special_suffixes[$0] } ?? name.suffix)
+    }
+
+    /// A name for a cat born outside the Clan, which has no suffix (Clangen's `find_outsider_name`).
+    func outsiderName(for origin: Cat.Origin, using rng: inout some RandomNumberGenerator) -> CatName {
+        let weights: [Int] = switch origin {
+        case .kittypet: [30, 50, 10, 10]
+        case .rogue: [3, 7, 35, 55]
+        default: [5, 15, 50, 30]
+        }
+        let pools = [lists.silly_names, lists.human_names, lists.loner_names, lists.normal_prefixes]
+        return CatName(prefix: pick(weighted(Array(zip(pools, weights)), &rng), &rng), suffix: "")
+    }
+
+    func randomClanPrefix(excluding current: String? = nil, using rng: inout some RandomNumberGenerator) -> String {
+        let pool = (lists.clan_prefixes + lists.normal_prefixes).filter { $0 != current && $0.count <= 11 }
+        return pick(pool, &rng)
     }
 
     private func isUsable(prefix: String, suffix: String) -> Bool {

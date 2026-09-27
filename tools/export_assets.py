@@ -132,10 +132,40 @@ def main():
         with open(OUT / "recipes" / recipe.name, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=1)
     shutil.copy(CLANGEN / "resources" / "lang" / "en" / "names.json", OUT / "names.json")
+    export_text()
+
     golden = OUT.parent.parent.parent / "ClowderTests" / "Golden"
     for png in golden.glob("*.png"):
         write_rgba(png, png.with_suffix(".rgba"))
     print(f"exported {len(SHEETS)} sheets to {OUT}")
+
+
+def export_text():
+    """Copy the event text Clowder narrates with. English files wrapped in {"en": ...} are unwrapped."""
+    lang = CLANGEN / "resources" / "lang" / "en"
+    text = OUT.parent / "Text"
+    if text.exists():
+        shutil.rmtree(text)
+    files = {
+        "ceremonies": sorted((lang / "events" / "ceremonies").glob("*.json")),
+        "death": [lang / "events" / "death" / "general.json", lang / "events" / "death" / "forest.json"],
+        "misc": [lang / "events" / "misc" / "general.json", lang / "events" / "misc" / "forest.json"],
+        "": [
+            lang / "pronouns.en.json",
+            lang / "conditions" / "pregnancy.json",
+            lang / "conditions" / "pregnancy.en.json",
+            CLANGEN / "resources" / "dicts" / "traits" / "trait_ranges.json",
+        ],
+    }
+    for folder, paths in files.items():
+        (text / folder).mkdir(parents=True, exist_ok=True)
+        for path in paths:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and list(data) == ["en"]:
+                data = data["en"]
+            with open(text / folder / path.name, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
 
 
 main()

@@ -74,7 +74,7 @@ final class RenderingTests: XCTestCase {
         let assets = try GameAssets.loadBundled()
         var rng = SystemRandomNumberGenerator()
         for _ in 0..<500 {
-            let cat = assets.factory.make(using: &rng)
+            let cat = assets.factory.make(rank: pick(Rank.allCases, &rng), using: &rng)
             for age in CatAge.allCases {
                 do {
                     _ = try assets.renderer.render(cat.appearance, age: age)
@@ -82,7 +82,7 @@ final class RenderingTests: XCTestCase {
                     return XCTFail("\(error) rendering \(cat.appearance)")
                 }
             }
-            XCTAssertFalse(assets.factory.names.display(cat.name, age: cat.age).isEmpty)
+            XCTAssertFalse(assets.displayName(cat).isEmpty)
         }
     }
 }
