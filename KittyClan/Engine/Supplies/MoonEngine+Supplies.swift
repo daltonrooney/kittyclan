@@ -15,15 +15,15 @@ extension MoonEngine {
         }
     }
 
-    /// Nursing queens (the mother of a living kit, else another parent) and the kits under 3 moons they feed.
+    /// Nursing queens (the mother of a living kit under 3 moons, else another parent) and the kits they feed.
     static func queens(in clan: Clan) -> (queens: Set<UUID>, fedKits: Set<UUID>) {
         var queens: Set<UUID> = []
         var fedKits: Set<UUID> = []
-        for kit in clan.living where kit.rank.isBaby {
+        for kit in clan.living where kit.rank.isBaby && kit.moons < 3 {
             let parents = kit.parents.compactMap { clan[$0] }.filter { clan.isAlive($0.id) }
             guard let queen = parents.first(where: { $0.sex == .female }) ?? parents.first else { continue }
             queens.insert(queen.id)
-            if kit.moons < 3 { fedKits.insert(kit.id) }
+            fedKits.insert(kit.id)
         }
         for id in clan.pregnancies.keys where clan.isAlive(id) { queens.insert(id) }
         return (queens, fedKits)
@@ -71,7 +71,9 @@ extension MoonEngine {
     // MARK: - Each moon
 
     /// Start of the moon: prey spoils, the Clan eats, then the moon's catch comes in.
-    func freshKillMoon(in clan: inout Clan, using rng: inout some RandomNumberGenerator) {
+    /// - Parameter patrolled: whether any patrol went out last moon. With starvation off, a Clan
+    ///   left to itself also gets Clangen's "hunting" focus catch.
+    func freshKillMoon(in clan: inout Clan, patrolled: Bool = true, using rng: inout some RandomNumberGenerator) {
         guard clan.preyAndHerbs else { return }
         clan.freshKill.log = []
         let spoiled = clan.freshKill.age()
@@ -82,7 +84,8 @@ extension MoonEngine {
         let eaten = before - clan.freshKill.total
         if eaten > 0 { clan.freshKill.log.append("The Clan ate \(Int(eaten.rounded())) pieces of prey.") }
 
-        let caught = autoCatch(in: clan, using: &rng)
+        var caught = autoCatch(in: clan, using: &rng)
+        if !clan.canStarve, !patrolled { caught += Self.huntingFocusCatch(in: clan) }
         clan.freshKill.add(caught)
         if caught > 0 { clan.freshKill.log.append("The Clan's hunters caught \(Int(caught)) pieces of prey this moon.") }
     }
@@ -105,6 +108,13 @@ extension MoonEngine {
         if hunters.isEmpty { hunters = clan.living.filter { !$0.isNotWorking } }
         if hunters.isEmpty { hunters = clan.living }
         return Double(hunters.reduce(0) { $0 + pick(catchList($1), &rng) })
+    }
+
+    /// Clangen's "hunting" Clan focus: 2 more prey per working warrior, deputy or leader, 1 per apprentice.
+    static func huntingFocusCatch(in clan: Clan) -> Double {
+        Double(clan.living.filter { !$0.isNotWorking }.reduce(0) { total, cat in
+            total + ([.leader, .deputy, .warrior].contains(cat.rank) ? 2 : cat.rank == .apprentice ? 1 : 0)
+        })
     }
 
     /// Clangen's `feed_cats` with the default "lowest rank first" order.
@@ -151,8 +161,8 @@ extension MoonEngine {
     /// Clangen's `handle_nutrient`: hungry cats become malnourished or starving and recover when fed.
     func hunger(for id: UUID, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [MoonEvent] {
         guard clan.preyAndHerbs, let library = conditions, let cat = clan[id], var entry = clan.nutrition[id] else { return [] }
-        if !clan.canStarve, entry.currentScore <= 0 {
-            entry.currentScore = entry.maxScore * 0.01
+        if !clan.canStarve, entry.percentage <= 20 {
+            entry.currentScore = entry.maxScore * 0.21
             clan.nutrition[id] = entry
         }
         let percentage = entry.percentage

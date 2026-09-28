@@ -21,6 +21,7 @@ struct MoonEngine: Sendable {
     func advance(_ clan: inout Clan, using rng: inout some RandomNumberGenerator) {
         var events: [MoonEvent] = []
         clan.age += 1
+        let patrolled = !clan.patrolledThisMoon.isEmpty
         clan.patrolledThisMoon = []
         for id in clan.pregnancies.keys { clan.pregnancies[id]?.moons += 1 }
         afterlifeMoon(in: &clan, using: &rng)
@@ -30,7 +31,7 @@ struct MoonEngine: Sendable {
         events += resolveLeaderDen(in: &clan, using: &rng)
         var interactions: [UUID: Int] = [:]
         events += lostCatReturns(in: &clan, counts: &interactions, using: &rng)
-        freshKillMoon(in: &clan, using: &rng)
+        freshKillMoon(in: &clan, patrolled: patrolled, using: &rng)
 
         var someoneJoined = false
         for id in clan.living.map(\.id) {
@@ -263,10 +264,10 @@ struct MoonEngine: Sendable {
     static func removeMentor(from id: UUID, in clan: inout Clan) {
         guard let a = clan.index(of: id), let mentorID = clan.cats[a].mentor else { return }
         clan.cats[a].mentor = nil
-        clan.cats[a].formerMentors.append(mentorID)
+        if !clan.cats[a].formerMentors.contains(mentorID) { clan.cats[a].formerMentors.append(mentorID) }
         if let m = clan.index(of: mentorID) {
             clan.cats[m].apprentices.removeAll { $0 == id }
-            clan.cats[m].formerApprentices.append(id)
+            if !clan.cats[m].formerApprentices.contains(id) { clan.cats[m].formerApprentices.append(id) }
         }
     }
 
@@ -295,8 +296,9 @@ struct MoonEngine: Sendable {
 
     // MARK: - Mates and kits
 
-    private func canHaveKits(_ cat: Cat?, in clan: Clan) -> Bool {
-        guard let cat, cat.isAlive, !cat.isNotWorking, cat.birthCooldown == 0, cat.moons >= 15, cat.isMateAge else { return false }
+    /// Clangen's `check_parents`; only the cat who rolls needs to be working.
+    private func canHaveKits(_ cat: Cat?, in clan: Clan, working: Bool = true) -> Bool {
+        guard let cat, cat.isAlive, !working || !cat.isNotWorking, cat.birthCooldown == 0, cat.moons >= 15, cat.isMateAge else { return false }
         return Self.canHaveKits.contains(cat.rank) && clan.pregnancies[cat.id] == nil
     }
 
@@ -340,20 +342,41 @@ struct MoonEngine: Sendable {
         }
 
         let cat = clan.cats[i]
-        guard cat.sex == .female, canHaveKits(cat, in: clan) else { return [] }
-        let partners = cat.mates.compactMap { clan[$0] }.filter { $0.sex == .male && canHaveKits($0, in: clan) }
-        guard let father = partners.randomElement(using: &rng) else { return [] }
+        guard canHaveKits(cat, in: clan) else { return [] }
+        let partners = cat.mates.compactMap { clan[$0] }.filter { $0.sex != cat.sex && canHaveKits($0, in: clan, working: false) }
+        guard let partner = partners.randomElement(using: &rng),
+              oneIn(kitChance(cat, partner, in: clan), &rng)
+        else { return [] }
 
+        let (mother, father) = cat.sex == .female ? (cat.id, partner.id) : (partner.id, cat.id)
+        clan.pregnancies[mother] = Pregnancy(otherParent: father)
+        return [.expecting(mother: mother)]
+    }
+
+    /// Clangen's `get_balanced_kit_chance` for a mated pair, as a 1-in-N chance. Both mates roll each moon.
+    func kitChance(_ first: Cat, _ second: Cat, in clan: Clan) -> Int {
+        var odds = Int(Int(80 * 0.7) * 7 / 10)
         let size = clan.living.count
-        var odds = 39.0
-        if size < 10 { odds = (odds * 0.5).rounded(.down) }
-        if size > 30 { odds = (odds * Double(size) / 30).rounded(.down) }
-        let children = clan.cats.filter { $0.parents.contains(id) }.count
-        odds += (odds * Double(children) * 0.1).rounded(.down)
-        guard oneIn(Int(odds), &rng) else { return [] }
-
-        clan.pregnancies[id] = Pregnancy(otherParent: father.id)
-        return [.expecting(mother: id)]
+        if size < 10 { odds /= 2 } else if size > 30 { odds = Int(Double(odds) * Double(size) / 30) }
+        if let relationships {
+            switch relationships.compatibility(first, second) {
+            case .positive: odds = Int(Double(odds) * 0.85)
+            case .negative: odds = Int(Double(odds) * 1.15)
+            case .neutral: break
+            }
+        }
+        let there = clan.relationship(from: first.id, to: second.id), back = clan.relationship(from: second.id, to: first.id)
+        for value in [\Relationship.romance, \.comfort, \.trust] {
+            let average = Double((there?[keyPath: value] ?? 0) + (back?[keyPath: value] ?? 0)) / 2
+            let cut = average >= 85 ? 0.3 : average >= 55 ? 0.2 : average >= 35 ? 0.1 : 0
+            odds -= Int(Double(odds) * cut)
+        }
+        if size > 0, clan.living.map(\.moons).reduce(0, +) / size > 80 { odds = Int(Double(odds) * 0.8) }
+        odds += Int(Double(odds) * Double(clan.children(of: first.id).count) * 0.1)
+        let biggest = clan.biggestFamily
+        if biggest.count > 1, biggest.contains(first.id) || biggest.contains(second.id) { odds = Int(Double(odds) * 1.7) }
+        if Double(clan.relatives(of: first.id).count) < Double(size) / 15 { odds = Int(Double(odds) * 0.7) }
+        return max(1, odds)
     }
 
     // MARK: - New cats

@@ -3,6 +3,21 @@ import Foundation
 struct CatName: Codable, Hashable, Sendable {
     var prefix: String
     var suffix: String
+    /// The player chose to drop the rank ending (kit/paw/star) and always show the suffix.
+    var specialSuffixHidden = false
+
+    init(prefix: String, suffix: String, specialSuffixHidden: Bool = false) {
+        self.prefix = prefix
+        self.suffix = suffix
+        self.specialSuffixHidden = specialSuffixHidden
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        prefix = try c.decode(String.self, forKey: .prefix)
+        suffix = try c.decode(String.self, forKey: .suffix)
+        specialSuffixHidden = try c.decodeIfPresent(Bool.self, forKey: .specialSuffixHidden) ?? false
+    }
 }
 
 /// Clangen's prefix + suffix naming (`scripts/cat/names.py`), minus biome and history rules.
@@ -76,6 +91,12 @@ struct NameGenerator: Sendable {
 
     /// The name shown for a cat of this rank: kits, apprentices and the leader get special endings.
     func display(_ name: CatName, rank: Rank) -> String {
+        let special = name.specialSuffixHidden ? nil : specialSuffix(for: rank)
+        return name.prefix + (special ?? name.suffix)
+    }
+
+    /// The ending a rank shows instead of the suffix: "kit", "paw" or "star".
+    func specialSuffix(for rank: Rank) -> String? {
         let key: String? = switch rank {
         case .newborn: "newborn"
         case .kitten: "kitten"
@@ -84,7 +105,7 @@ struct NameGenerator: Sendable {
         case .leader: "leader"
         default: nil
         }
-        return name.prefix + (key.flatMap { lists.special_suffixes[$0] } ?? name.suffix)
+        return key.flatMap { lists.special_suffixes[$0] }
     }
 
     /// A name for a cat born outside the Clan, which has no suffix (Clangen's `find_outsider_name`).

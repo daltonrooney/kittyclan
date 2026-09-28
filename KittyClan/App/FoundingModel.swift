@@ -21,7 +21,7 @@ final class FoundingModel {
         }
     }
     /// Clangen's expanded mode: a fresh-kill pile to keep full and herbs for healing.
-    var preyAndHerbs = true {
+    var preyAndHerbs = false {
         didSet { if !preyAndHerbs { canStarve = false } }
     }
     var canStarve = false
