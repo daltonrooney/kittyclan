@@ -46,7 +46,15 @@ struct PatrolEngine: Sendable {
     // MARK: - Starting a patrol
 
     /// Picks a patrol for these cats. A medicine cat always makes it an herb-gathering patrol.
+    /// The Clan only changes (cats marked as patrolled, new outsiders) when a patrol is found.
     func start(_ catIDs: [UUID], type requested: PatrolType?, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> PatrolSession? {
+        var working = clan
+        guard let session = begin(catIDs, type: requested, in: &working, using: &rng) else { return nil }
+        clan = working
+        return session
+    }
+
+    private func begin(_ catIDs: [UUID], type requested: PatrolType?, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> PatrolSession? {
         let cats = catIDs.compactMap { clan[$0] }
         guard (1...6).contains(cats.count) else { return nil }
         let hasHealer = cats.contains { [.medicineCat, .medicineApprentice].contains($0.rank) }

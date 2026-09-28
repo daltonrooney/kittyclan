@@ -14,14 +14,18 @@ struct MoonLogCard: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
-            if log.entries.isEmpty {
+            let events = log.entries.filter { $0.kind != .interaction }
+            let interactions = log.entries.filter { $0.kind == .interaction }
+            if events.isEmpty {
                 Text("A quiet moon passes.")
                     .italic()
                     .foregroundStyle(.secondary)
-            } else {
-                ForEach(log.entries) { entry in
-                    LogEntryRow(entry: entry)
-                }
+            }
+            ForEach(events) { entry in
+                LogEntryRow(entry: entry)
+            }
+            if !interactions.isEmpty {
+                InteractionsDisclosure(entries: interactions)
             }
         }
         .padding()
@@ -30,7 +34,7 @@ struct MoonLogCard: View {
             RoundedRectangle(cornerRadius: 16)
                 .strokeBorder(isHighlighted ? Color.yellow : Color.clear, lineWidth: 2)
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityAddTraits(isHighlighted ? .isSelected : [])
     }
 }

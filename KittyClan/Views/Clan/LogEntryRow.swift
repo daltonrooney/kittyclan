@@ -9,7 +9,7 @@ struct LogEntryRow: View {
                 .foregroundStyle(entry.kind.color)
                 .frame(width: 22)
                 .accessibilityLabel(entry.kind.label)
-            Text(entry.text)
+            Text(entry.text.storyText)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

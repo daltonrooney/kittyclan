@@ -11,11 +11,12 @@ struct ClanHeader: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(clan.displayName)
                         .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    HStack(spacing: 16) {
-                        Label("Moon \(clan.age) · \(clan.season.rawValue)", systemImage: clan.season.symbol)
-                        if clan.isAlive(clan.leader) {
-                            Label("^[\(clan.leaderLives) life](inflect: true) left", systemImage: "heart.fill")
-                                .foregroundStyle(.red)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 16) {
+                            ClanStatusLabels(clan: clan)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            ClanStatusLabels(clan: clan)
                         }
                     }
                     .font(.headline)
@@ -29,6 +30,7 @@ struct ClanHeader: View {
                         .buttonStyle(.bordered)
                         .buttonBorderShape(.circle)
                 }
+                PatrolButton()
                 TimeskipButton()
                 ClanMenu()
                     .labelStyle(.iconOnly)

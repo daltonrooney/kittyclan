@@ -18,6 +18,7 @@ final class AppModel {
     private(set) var latestMoon: Int?
     var errorMessage: String?
     var selectedCat: Cat?
+    var patrol: PatrolModel?
 
     @ObservationIgnored private(set) var sprites: SpriteCache?
     @ObservationIgnored private let store: ClanStore
@@ -61,6 +62,59 @@ final class AppModel {
         await save()
     }
 
+    /// Cats who can still go on patrol this moon.
+    var patrolEligible: [Cat] {
+        clan.map(PatrolEngine.eligible) ?? []
+    }
+
+    func beginPatrol() {
+        patrol = PatrolModel(app: self)
+    }
+
+    /// Picks a patrol for these cats and saves the Clan. Returns nil when no patrol fits them.
+    func startPatrol(_ catIDs: [Cat.ID], type: PatrolType?) async -> PatrolSession? {
+        guard let assets, let current = clan, !isAdvancing else { return nil }
+        isAdvancing = true
+        defer { isAdvancing = false }
+        let (updated, session) = await Self.startPatrol(catIDs, type: type, in: current, engine: assets.patrols)
+        guard let session else { return nil }
+        clan = updated
+        await save()
+        return session
+    }
+
+    /// Resolves the player's choice on a patrol and saves the Clan.
+    func finishPatrol(_ session: PatrolSession, choice: PatrolChoice) async -> PatrolResult? {
+        guard let assets, let current = clan, !isAdvancing else { return nil }
+        isAdvancing = true
+        defer { isAdvancing = false }
+        let (updated, result) = await Self.finishPatrol(session, choice: choice, in: current, engine: assets.patrols)
+        clan = updated
+        await save()
+        return result
+    }
+
+    func patrolArtURL(_ name: String?) -> URL? {
+        assets?.patrols.library.artURL(name)
+    }
+
+    func conditionName(_ condition: CatCondition) -> String {
+        let name = assets?.engine.conditions?.displayName(condition.name) ?? condition.name
+        return name.prefix(1).uppercased() + name.dropFirst()
+    }
+
+    /// This cat's non-neutral feelings toward living Clan cats, strongest first.
+    func relationships(of cat: Cat) -> [CatRelationshipEntry] {
+        guard let clan, let feelings = clan.relationships[cat.id] else { return [] }
+        let living = Dictionary(uniqueKeysWithValues: clan.living.map { ($0.id, $0) })
+        return feelings
+            .compactMap { id, relationship in
+                guard id != cat.id, !relationship.isNeutral, let other = living[id] else { return nil }
+                return CatRelationshipEntry(cat: other, relationship: relationship)
+            }
+            .sorted { $0.relationship.totalMagnitude > $1.relationship.totalMagnitude }
+    }
+
     func clearHighlight() {
         latestMoon = nil
     }
@@ -75,6 +129,7 @@ final class AppModel {
         clan = nil
         latestMoon = nil
         selectedCat = nil
+        patrol = nil
         state = .founding(FoundingModel(assets: assets))
     }
 
@@ -121,12 +176,30 @@ final class AppModel {
         for _ in 0..<moons { engine.advance(&clan, using: &rng) }
         return clan
     }
+
+    @concurrent
+    private static func startPatrol(_ catIDs: [Cat.ID], type: PatrolType?, in clan: Clan, engine: PatrolEngine) async -> (Clan, PatrolSession?) {
+        var clan = clan
+        var rng = SystemRandomNumberGenerator()
+        let session = engine.start(catIDs, type: type, in: &clan, using: &rng)
+        return (clan, session)
+    }
+
+    @concurrent
+    private static func finishPatrol(_ session: PatrolSession, choice: PatrolChoice, in clan: Clan, engine: PatrolEngine) async -> (Clan, PatrolResult) {
+        var clan = clan
+        var rng = SystemRandomNumberGenerator()
+        let result = engine.finish(session, choice: choice, in: &clan, using: &rng)
+        return (clan, result)
+    }
 }
 
 #if DEBUG
 extension AppModel {
     /// Launch arguments for reaching screens without taps: `-autofound YES`, `-timeskips N`,
-    /// `-foundingStep cats`, `-autopick YES`.
+    /// `-foundingStep cats`, `-autopick YES`, `-patrol hunting|border|training|herb_gathering|any`
+    /// (picks cats and starts a patrol), `-patrolPickOnly YES` (stops at cat picking),
+    /// `-patrolResult YES` (proceeds to the result).
     func applyDebugLaunchArguments() async {
         let defaults = UserDefaults.standard
         guard let assets else { return }
@@ -151,12 +224,28 @@ extension AppModel {
         }
 
         selectedCat = debugCatToShow
+        await debugPatrol()
     }
 
-    /// `-showCat first` opens the leader; any other value opens the first cat whose name starts with it.
+    private func debugPatrol() async {
+        let defaults = UserDefaults.standard
+        guard let request = defaults.string(forKey: "patrol") else { return }
+        beginPatrol()
+        guard let patrol else { return }
+        patrol.selectType(PatrolType(rawValue: request))
+        patrol.addRandom(3)
+        guard !defaults.bool(forKey: "patrolPickOnly") else { return }
+        await patrol.start()
+        if defaults.bool(forKey: "patrolResult") { await patrol.choose(.proceed) }
+    }
+
+    /// `-showCat first` opens the leader; `-showCat sick` opens the cat with the most known conditions; any other value opens the first cat whose name starts with it.
     var debugCatToShow: Cat? {
         guard let query = UserDefaults.standard.string(forKey: "showCat"), let clan else { return nil }
         if query == "first" { return clan[clan.leader] ?? clan.living.first }
+        if query == "sick" {
+            return clan.living.max { $0.visibleConditions.count < $1.visibleConditions.count }
+        }
         return clan.cats.first { displayName($0).lowercased().hasPrefix(query.lowercased()) }
     }
 }

@@ -27,6 +27,9 @@ struct ClanView: View {
             .sheet(item: $model.selectedCat) { cat in
                 CatDetailSheet(cat: cat)
             }
+            .sheet(item: $model.patrol) { patrol in
+                PatrolSheet(patrol: patrol)
+            }
             .sheet(isPresented: $isShowingLog) {
                 NavigationStack {
                     MoonLogPanel()

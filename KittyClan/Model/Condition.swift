@@ -31,6 +31,9 @@ struct CatCondition: Codable, Hashable, Sendable {
     var moonsUntil = 0
 
     func moonsWith(clanAge: Int) -> Int { clanAge - moonStart }
+
+    /// False while a condition the cat was born with hasn't shown yet.
+    var isRevealed: Bool { !(bornWith && moonsUntil >= 0) }
 }
 
 extension Cat {
