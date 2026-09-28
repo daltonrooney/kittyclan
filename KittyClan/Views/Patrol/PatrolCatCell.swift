@@ -9,6 +9,7 @@ struct PatrolCatCell: View {
 
     var body: some View {
         let name = model.displayName(cat)
+        let skills = model.shortSkills(of: cat)
         Button(action: action) {
             VStack(spacing: 4) {
                 CatSprite(cat: cat)
@@ -35,6 +36,7 @@ struct PatrolCatCell: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                SkillLabel(text: skills)
             }
             .contentShape(.rect)
         }
@@ -43,7 +45,7 @@ struct PatrolCatCell: View {
         .opacity(isDisabled ? 0.5 : 1)
         .sensoryFeedback(.selection, trigger: isSelected)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(name), \(cat.rank.label)")
+        .accessibilityLabel("\(name), \(cat.rank.label), \(skills)")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }

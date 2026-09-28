@@ -19,6 +19,7 @@ final class AppModel {
     var errorMessage: String?
     var selectedCat: Cat?
     var patrol: PatrolModel?
+    var isShowingSupplies = false
 
     @ObservationIgnored private(set) var sprites: SpriteCache?
     @ObservationIgnored private let store: ClanStore
@@ -94,6 +95,15 @@ final class AppModel {
         return result
     }
 
+    /// Feeds these cats from the fresh-kill pile and saves the Clan.
+    func feed(_ catIDs: [Cat.ID]) async {
+        guard let assets, let current = clan, current.preyAndHerbs, !isAdvancing else { return }
+        isAdvancing = true
+        defer { isAdvancing = false }
+        clan = await Self.feed(catIDs, in: current, engine: assets.engine)
+        await save()
+    }
+
     func patrolArtURL(_ name: String?) -> URL? {
         assets?.patrols.library.artURL(name)
     }
@@ -113,6 +123,74 @@ final class AppModel {
                 return CatRelationshipEntry(cat: other, relationship: relationship)
             }
             .sorted { $0.relationship.totalMagnitude > $1.relationship.totalMagnitude }
+    }
+
+    // MARK: - Skills and supplies
+
+    /// Clangen's profile wording, e.g. "great hunter & fledgeling storyteller".
+    func skills(of cat: Cat) -> String {
+        assets?.skillText.describe(cat) ?? ""
+    }
+
+    /// The short form for lists, e.g. "hunting & storytelling".
+    func shortSkills(of cat: Cat) -> String {
+        assets?.skillText.short(cat) ?? ""
+    }
+
+    var preyNeeded: Double {
+        clan.map(MoonEngine.preyNeeded) ?? 0
+    }
+
+    var isLowOnPrey: Bool {
+        guard let clan, clan.preyAndHerbs else { return false }
+        return clan.freshKill.total < preyNeeded
+    }
+
+    func nutrition(of cat: Cat) -> Nutrition? {
+        guard let clan, clan.preyAndHerbs, cat.isAlive else { return nil }
+        return clan.nutrition[cat.id]
+    }
+
+    /// Living cats who aren't fully fed, hungriest first.
+    var hungryCats: [HungryCat] {
+        guard let clan, clan.preyAndHerbs else { return [] }
+        return clan.living
+            .compactMap { cat in
+                guard let nutrition = clan.nutrition[cat.id], nutrition.percentage < 100 else { return nil }
+                return HungryCat(cat: cat, nutrition: nutrition)
+            }
+            .sorted { $0.nutrition.percentage < $1.nutrition.percentage }
+    }
+
+    /// Herbs in the medicine den, in the library's order.
+    var herbStock: [HerbStock] {
+        guard let clan, let library = assets?.engine.herbLibrary else { return [] }
+        let size = clan.living.count
+        return library.herbs.compactMap { herb in
+            let count = clan.herbs.total(of: herb.name)
+            guard count > 0 else { return nil }
+            return HerbStock(
+                id: herb.name,
+                name: library.name(herb.name, count: count),
+                count: count,
+                rating: HerbSupply.rating(count, clanSize: size)
+            )
+        }
+    }
+
+    var herbRating: String? {
+        guard let clan, let library = assets?.engine.herbLibrary else { return nil }
+        return clan.herbs.overallRating(herbs: library.herbs.map(\.name), clanSize: clan.living.count)
+    }
+
+    /// The medicine cat's view of the herb stores this moon, if the Clan has one.
+    var herbStatus: String? {
+        guard let assets, let clan, let rating = herbRating,
+              let healer = clan.living.first(where: { $0.rank == .medicineCat }),
+              let lines = assets.engine.herbLibrary?.storageMessages[rating], !lines.isEmpty
+        else { return nil }
+        let line = lines[clan.age % lines.count]
+        return assets.patrols.template.resolve(line, cats: ["m_c": healer], clan: clan)
     }
 
     func clearHighlight() {
@@ -178,6 +256,13 @@ final class AppModel {
     }
 
     @concurrent
+    private static func feed(_ catIDs: [Cat.ID], in clan: Clan, engine: MoonEngine) async -> Clan {
+        var clan = clan
+        engine.feed(catIDs, in: &clan, manual: true)
+        return clan
+    }
+
+    @concurrent
     private static func startPatrol(_ catIDs: [Cat.ID], type: PatrolType?, in clan: Clan, engine: PatrolEngine) async -> (Clan, PatrolSession?) {
         var clan = clan
         var rng = SystemRandomNumberGenerator()
@@ -196,8 +281,9 @@ final class AppModel {
 
 #if DEBUG
 extension AppModel {
-    /// Launch arguments for reaching screens without taps: `-autofound YES`, `-timeskips N`,
-    /// `-foundingStep cats`, `-autopick YES`, `-patrol hunting|border|training|herb_gathering|any`
+    /// Launch arguments for reaching screens without taps: `-autofound YES` (`-classic YES` founds
+    /// without prey and herbs), `-timeskips N`, `-foundingStep cats|options`, `-autopick YES`,
+    /// `-supplies YES|herbs` (opens the supplies sheet, optionally at the medicine den), `-feed YES` (feeds hungry cats), `-patrol hunting|border|training|herb_gathering|any`
     /// (picks cats and starts a patrol), `-patrolPickOnly YES` (stops at cat picking),
     /// `-patrolResult YES` (proceeds to the result).
     func applyDebugLaunchArguments() async {
@@ -207,11 +293,18 @@ extension AppModel {
         if defaults.bool(forKey: "autofound") {
             let founding = FoundingModel(assets: assets)
             founding.autopick()
+            founding.preyAndHerbs = !defaults.bool(forKey: "classic")
             await found(from: founding)
         } else if case .founding(let founding) = state {
-            if defaults.string(forKey: "foundingStep") == "cats" {
+            switch defaults.string(forKey: "foundingStep") {
+            case "cats":
                 founding.randomName()
                 founding.showCats()
+            case "options":
+                founding.autopick()
+                founding.showOptions()
+            default:
+                break
             }
             if defaults.bool(forKey: "autopick") { founding.autopick() }
         }
@@ -223,7 +316,9 @@ extension AppModel {
             await save()
         }
 
+        if defaults.bool(forKey: "feed") { await feed(hungryCats.map(\.id)) }
         selectedCat = debugCatToShow
+        isShowingSupplies = defaults.string(forKey: "supplies") != nil
         await debugPatrol()
     }
 

@@ -7,6 +7,7 @@ import Observation
 final class FoundingModel {
     enum Step: Hashable {
         case chooseCats
+        case options
     }
 
     let assets: GameAssets
@@ -18,6 +19,11 @@ final class FoundingModel {
             }
         }
     }
+    /// Clangen's expanded mode: a fresh-kill pile to keep full and herbs for healing.
+    var preyAndHerbs = true {
+        didSet { if !preyAndHerbs { canStarve = false } }
+    }
+    var canStarve = false
     private(set) var candidates: [Cat] = []
     private(set) var selection = FoundingSelection()
     private(set) var rerollsLeft = ClanFounding.rerolls
@@ -56,6 +62,11 @@ final class FoundingModel {
 
     func showCats() {
         path = [.chooseCats]
+    }
+
+    func showOptions() {
+        guard canFound else { return }
+        path = [.chooseCats, .options]
     }
 
     func toggle(_ cat: Cat) {
@@ -98,6 +109,8 @@ final class FoundingModel {
             deputy: deputy,
             medicineCat: medicineCat,
             members: selection.members.compactMap(cat),
+            preyAndHerbs: preyAndHerbs,
+            canStarve: canStarve,
             engine: assets.engine,
             using: &rng
         )

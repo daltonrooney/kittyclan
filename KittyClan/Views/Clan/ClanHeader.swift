@@ -21,6 +21,8 @@ struct ClanHeader: View {
                     }
                     .font(.headline)
                     .foregroundStyle(.secondary)
+                    SuppliesButton()
+                        .padding(.top, 4)
                 }
                 Spacer()
                 if showsLogButton {

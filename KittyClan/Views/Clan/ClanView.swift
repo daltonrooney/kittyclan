@@ -30,6 +30,9 @@ struct ClanView: View {
             .sheet(item: $model.patrol) { patrol in
                 PatrolSheet(patrol: patrol)
             }
+            .sheet(isPresented: $model.isShowingSupplies) {
+                SuppliesSheet()
+            }
             .sheet(isPresented: $isShowingLog) {
                 NavigationStack {
                     MoonLogPanel()

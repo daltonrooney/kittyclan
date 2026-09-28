@@ -15,7 +15,8 @@ struct FoundingCatsStep: View {
                         CandidateCell(
                             cat: cat,
                             name: founding.displayName(of: cat),
-                            role: founding.role(of: cat)
+                            role: founding.role(of: cat),
+                            skills: model.assets?.skillText.short(cat)
                         ) {
                             founding.toggle(cat)
                         }
@@ -36,8 +37,8 @@ struct FoundingCatsStep: View {
                 .buttonStyle(.bordered)
                 .disabled(founding.rerollsLeft == 0)
                 Spacer()
-                Button(action: found) {
-                    Label("Found Clan", systemImage: "flag.fill")
+                Button(action: founding.showOptions) {
+                    Label("Next", systemImage: "arrow.right")
                         .font(.title3.bold())
                         .padding(.horizontal, 12)
                 }
@@ -49,9 +50,5 @@ struct FoundingCatsStep: View {
             .background(.bar)
         }
         .animation(.snappy, value: founding.selectedCount)
-    }
-
-    private func found() {
-        Task { await model.found(from: founding) }
     }
 }

@@ -9,6 +9,7 @@ struct PatrolPickerView: View {
         let eligible = patrol.eligible
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
+                PatrolPreyHint(patrol: patrol)
                 PatrolTypePicker(patrol: patrol)
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .firstTextBaseline) {

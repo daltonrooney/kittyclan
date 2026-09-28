@@ -4,6 +4,7 @@ struct CandidateCell: View {
     let cat: Cat
     let name: String
     let role: ClanFounding.Role?
+    let skills: String?
     let action: () -> Void
 
     var body: some View {
@@ -25,6 +26,9 @@ struct CandidateCell: View {
                 Text("\(cat.rank.label) · \(cat.moonsText)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let skills {
+                    SkillLabel(text: skills)
+                }
             }
             .padding(10)
             .background(role == nil ? Color.clear : Color.accentColor.opacity(0.15), in: .rect(cornerRadius: 16))
@@ -36,7 +40,7 @@ struct CandidateCell: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(name), \(cat.rank.label), \(cat.moonsText)")
+        .accessibilityLabel([name, cat.rank.label, cat.moonsText, skills].compactMap(\.self).joined(separator: ", "))
         .accessibilityValue(role?.title ?? "Not chosen")
         .accessibilityAddTraits(.isButton)
     }
