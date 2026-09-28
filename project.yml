@@ -1,4 +1,4 @@
-name: Clowder
+name: KittyClan
 options:
   bundleIdPrefix: com.madebyraygun
   deploymentTarget:
@@ -10,42 +10,42 @@ settings:
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
 targets:
-  Clowder:
+  KittyClan:
     type: application
     platform: iOS
     sources:
-      - path: Clowder
+      - path: KittyClan
         excludes: ["Resources/**"]
-      - path: Clowder/Resources/Sprites
+      - path: KittyClan/Resources/Sprites
         type: folder
         buildPhase: resources
-      - path: Clowder/Resources/Text
+      - path: KittyClan/Resources/Text
         type: folder
         buildPhase: resources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.madebyraygun.clowder
+        PRODUCT_BUNDLE_IDENTIFIER: com.madebyraygun.kittyclan
         TARGETED_DEVICE_FAMILY: "2"
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
-        INFOPLIST_KEY_CFBundleDisplayName: Clowder
+        INFOPLIST_KEY_CFBundleDisplayName: KittyClan
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         COMPRESS_PNG_FILES: NO
         STRIP_PNG_TEXT: NO
-  ClowderTests:
+  KittyClanTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: ClowderTests
+      - path: KittyClanTests
         excludes: ["Golden/**"]
-      - path: ClowderTests/Golden
+      - path: KittyClanTests/Golden
         type: folder
         buildPhase: resources
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
     dependencies:
-      - target: Clowder
+      - target: KittyClan

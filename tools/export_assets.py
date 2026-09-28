@@ -1,4 +1,4 @@
-"""Convert Clangen sprite sheets and flatten their JSON tables into Clowder's bundle.
+"""Convert Clangen sprite sheets and flatten their JSON tables into KittyClan's bundle.
 
 Run with Clangen's venv (needs Pillow):
     /path/to/clangen/.venv/bin/python tools/export_assets.py /path/to/clangen
@@ -21,7 +21,7 @@ from pathlib import Path
 from PIL import Image
 
 CLANGEN = Path(sys.argv[1]).resolve()
-OUT = Path(__file__).resolve().parent.parent / "Clowder" / "Resources" / "Sprites"
+OUT = Path(__file__).resolve().parent.parent / "KittyClan" / "Resources" / "Sprites"
 DICTS = CLANGEN / "sprites" / "dicts"
 
 SHEETS = [
@@ -134,14 +134,14 @@ def main():
     shutil.copy(CLANGEN / "resources" / "lang" / "en" / "names.json", OUT / "names.json")
     export_text()
 
-    golden = OUT.parent.parent.parent / "ClowderTests" / "Golden"
+    golden = OUT.parent.parent.parent / "KittyClanTests" / "Golden"
     for png in golden.glob("*.png"):
         write_rgba(png, png.with_suffix(".rgba"))
     print(f"exported {len(SHEETS)} sheets to {OUT}")
 
 
 def export_text():
-    """Copy the event text Clowder narrates with. English files wrapped in {"en": ...} are unwrapped."""
+    """Copy the event text KittyClan narrates with. English files wrapped in {"en": ...} are unwrapped."""
     lang = CLANGEN / "resources" / "lang" / "en"
     text = OUT.parent / "Text"
     if text.exists():

@@ -10,7 +10,7 @@ struct StoryPick: Sendable {
     var livesLost = LivesLost.one
 }
 
-/// Clangen's ceremony, death and misc event text, filtered to the features Clowder simulates.
+/// Clangen's ceremony, death and misc event text, filtered to the features KittyClan simulates.
 ///
 /// Events are kept only when every key, constraint and text token is understood; anything
 /// else (other Clans, herbs, skills, injuries…) is dropped at load time rather than half-supported.
@@ -192,7 +192,7 @@ private struct ShortEvent: Sendable {
     ]
 
     init?(_ json: [String: Any]) {
-        // Supply changes are ignored until Clowder tracks prey and herbs, so only unconditional ones pass.
+        // Supply changes are ignored until KittyClan tracks prey and herbs, so only unconditional ones pass.
         let supplies = json["supplies"] as? [[String: Any]] ?? []
         guard Set(json.keys).isSubset(of: Self.keys),
               supplies.allSatisfy({ ($0["trigger"] as? [String]) == ["always"] }),
@@ -262,7 +262,7 @@ private struct ShortEvent: Sendable {
     }
 }
 
-/// An `involved_cats`, `m_c` or `r_c` constraint block, limited to keys Clowder can evaluate.
+/// An `involved_cats`, `m_c` or `r_c` constraint block, limited to keys KittyClan can evaluate.
 private struct Constraint: Sendable {
     var ages: [String]?
     var statuses: [String]?
@@ -283,7 +283,7 @@ private struct Constraint: Sendable {
             case "trait": traits = value as? [String]
             case "gender": genders = value as? [String]
             case "skill":
-                // Clowder cats have no skills yet, so only exclusions ("-FIGHTER,2") can pass.
+                // KittyClan cats have no skills yet, so only exclusions ("-FIGHTER,2") can pass.
                 skillsPass = (value as? [String] ?? []).allSatisfy { $0.hasPrefix("-") }
             case "group":
                 guard (value as? [String])?.allSatisfy({ $0 == "player_clan" }) == true else { return nil }

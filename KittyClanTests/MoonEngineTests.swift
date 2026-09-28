@@ -1,5 +1,5 @@
 import XCTest
-@testable import Clowder
+@testable import KittyClan
 
 struct SeededRNG: RandomNumberGenerator {
     private var state: UInt64

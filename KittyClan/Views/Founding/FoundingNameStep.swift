@@ -19,7 +19,7 @@ struct FoundingNameStep: View {
 
             HStack(spacing: 12) {
                 HStack(spacing: 0) {
-                    TextField("Thunder", text: $founding.name)
+                    TextField("Kitty", text: $founding.name)
                         .focused($isNameFocused)
                         .textInputAutocapitalization(.words)
                         .autocorrectionDisabled()

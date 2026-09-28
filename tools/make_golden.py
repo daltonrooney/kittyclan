@@ -4,9 +4,9 @@ Run from the ClanGen repo root with its venv:
 
     cd /Users/dalton/Dev/temp/clangen
     SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
-        .venv/bin/python /Users/dalton/Dev/temp/clowder/tools/make_golden.py
+        .venv/bin/python /Users/dalton/Dev/temp/kittyclan/tools/make_golden.py
 
-Writes to ClowderTests/Golden (relative to this script's repo):
+Writes to KittyClanTests/Golden (relative to this script's repo):
   cat_NNN.png      raw 50x50 RGBA output of display_sprites.generate_sprite
   cats.json        appearance attributes for each cat
   blend_cases.json pygame per-pixel blend results for each blend op used
@@ -46,7 +46,7 @@ assert game_setting_get("shaders") is False
 constants.CONFIG["fun"]["april_fools"] = False
 constants.CONFIG["fun"]["all_cats_are_newborn"] = False
 
-OUT = Path(__file__).resolve().parent.parent / "ClowderTests" / "Golden"
+OUT = Path(__file__).resolve().parent.parent / "KittyClanTests" / "Golden"
 SEED = 20260927
 N_CATS = 60
 AGES = list(CatAge)

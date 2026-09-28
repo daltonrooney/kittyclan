@@ -1,5 +1,5 @@
 import XCTest
-@testable import Clowder
+@testable import KittyClan
 
 final class RenderingTests: XCTestCase {
     private static let golden = Bundle(for: RenderingTests.self).url(forResource: "Golden", withExtension: nil)!

@@ -98,8 +98,13 @@ struct NameGenerator: Sendable {
         return CatName(prefix: pick(weighted(Array(zip(pools, weights)), &rng), &rng), suffix: "")
     }
 
+    /// Clan names from the Warriors books, which random Clan names avoid.
+    private static let canonClanPrefixes: Set<String> = ["Thunder", "River", "Wind", "Shadow", "Sky", "Star", "Blood"]
+
     func randomClanPrefix(excluding current: String? = nil, using rng: inout some RandomNumberGenerator) -> String {
-        let pool = (lists.clan_prefixes + lists.normal_prefixes).filter { $0 != current && $0.count <= 11 }
+        let pool = (lists.clan_prefixes + lists.normal_prefixes).filter {
+            $0 != current && $0.count <= 11 && !Self.canonClanPrefixes.contains($0)
+        }
         return pick(pool, &rng)
     }
 
