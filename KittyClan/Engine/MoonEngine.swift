@@ -7,6 +7,7 @@ struct MoonEngine: Sendable {
     var library: EventLibrary?
     var relationships: RelationshipEngine?
     var conditions: ConditionLibrary?
+    var herbLibrary: HerbLibrary?
 
     private static let canHaveKits: Set<Rank> = [.leader, .deputy, .medicineCat, .warrior, .elder]
     private static let litterWeights: [CatAge: [Int]] = [
@@ -21,6 +22,7 @@ struct MoonEngine: Sendable {
         clan.age += 1
         clan.patrolledThisMoon = []
         for id in clan.pregnancies.keys { clan.pregnancies[id]?.moons += 1 }
+        freshKillMoon(in: &clan, using: &rng)
 
         var someoneJoined = false
         var interactions: [UUID: Int] = [:]
@@ -37,6 +39,8 @@ struct MoonEngine: Sendable {
                 traits.setKit(clan.cats[i].rank.isBaby, &clan.cats[i].personality, using: &rng)
             }
 
+            events += hunger(for: id, in: &clan, using: &rng)
+            guard clan.isAlive(id) else { continue }
             if let cat = clan[id], cat.isIll || cat.isInjured {
                 events += progressConditions(for: id, skip: &skip, in: &clan, using: &rng)
                 guard clan.isAlive(id) else { continue }
@@ -56,7 +60,11 @@ struct MoonEngine: Sendable {
             if let relationships {
                 events += relationships.moon(for: id, in: &clan, counts: &interactions, using: &rng)
             }
-            if let cat = clan[id], cat.isIll || cat.isInjured { continue }
+            if let cat = clan[id], cat.isIll || cat.isInjured {
+                // Clangen skips death rolls while a cat is unwell; the 300-moon limit still applies.
+                if cat.moons >= 300 { events += die(id, cause: .oldAge, in: &clan, using: &rng) }
+                continue
+            }
 
             if !someoneJoined, let joined = invite(by: id, in: &clan, using: &rng) {
                 events += joined
@@ -65,8 +73,10 @@ struct MoonEngine: Sendable {
                     events += relationships?.welcome(newcomer, in: &clan, counts: &interactions, using: &rng) ?? []
                 }
             }
-            if oneIn(30, &rng), let cat = clan[id], let pick = library?.miscEvent(for: cat, in: clan, using: &rng) {
+            if oneIn(30, &rng), let cat = clan[id],
+               let pick = library?.miscEvent(for: cat, in: clan, supplies: supplyCheck(for: clan, using: &rng), using: &rng) {
                 relationships?.apply(pick.relationshipChanges, cats: pick.allCats, in: &clan, using: &rng)
+                applySupplies(pick.supplies, in: &clan, using: &rng)
                 applyInjuries(pick.injuries, cats: pick.cats, in: &clan, using: &rng)
                 events.append(.story(pick, .info))
             }
@@ -78,7 +88,11 @@ struct MoonEngine: Sendable {
                 if clan.isAlive(id) { events += deathRolls(for: id, in: &clan, using: &rng) }
             }
         }
-        basicTreatment(in: &clan, using: &rng)
+        herbMoon(in: &clan, using: &rng)
+        if clan.preyAndHerbs {
+            updateNutrition(in: &clan)
+            if Self.preyNeeded(in: clan) > clan.freshKill.total { events.append(.lowPrey) }
+        }
 
         for cat in clan.living where cat.rank.isApprentice && cat.mentor == nil {
             if let mentor = Self.assignMentor(to: cat.id, in: &clan, using: &rng) {
@@ -355,12 +369,13 @@ struct MoonEngine: Sendable {
     /// Picks a Clangen death event for the cat if one fits, otherwise a plain death.
     private func die(_ id: UUID, cause: DeathCause, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [MoonEvent] {
         guard let cat = clan[id],
-              let pick = library?.deathEvent(for: cat, oldAge: cause == .oldAge, in: clan, using: &rng),
+              let pick = library?.deathEvent(for: cat, oldAge: cause == .oldAge, in: clan, supplies: supplyCheck(for: clan, using: &rng), using: &rng),
               pick.deaths.contains(id)
         else { return loseLifeOrDie(id, cause: cause, in: &clan, using: &rng) }
 
         relationships?.apply(pick.relationshipChanges, cats: pick.allCats, in: &clan, using: &rng)
         applyInjuries(pick.injuries, cats: pick.cats, in: &clan, using: &rng)
+        applySupplies(pick.supplies, in: &clan, using: &rng)
         var events: [MoonEvent] = [.story(pick, .death)]
         for victim in pick.deaths {
             let lives: Int = if victim != clan.leader {

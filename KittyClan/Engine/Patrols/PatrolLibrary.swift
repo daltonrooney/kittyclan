@@ -141,7 +141,8 @@ struct PatrolOutcome: Sendable {
     let meet: [PatrolTargets]
     let joins: [(cats: [String], statuses: [String], changeName: Bool)]
     let preySize: String?
-    let gathersHerbs: Bool
+    /// Herb blocks: "random_herbs" or a herb name, with a size such as "medium".
+    let herbs: [(type: String, size: String)]
     let tags: [String]
     let season: [String]
     let art: String?
@@ -193,7 +194,12 @@ struct PatrolOutcome: Sendable {
         let supply = json["supply"] as? [[String: Any]] ?? []
         preySize = supply.first { $0["type"] as? String == "freshkill" }
             .flatMap { ($0["adjust"] as? String)?.replacingOccurrences(of: "increase_", with: "") }
-        gathersHerbs = supply.contains { $0["type"] as? String != "freshkill" }
+        herbs = supply.compactMap { block in
+            guard let type = block["type"] as? String, type != "freshkill",
+                  let adjust = block["adjust"] as? String, adjust.hasPrefix("increase_")
+            else { return nil }
+            return (type, String(adjust.dropFirst("increase_".count)))
+        }
 
         tags = json["tags"] as? [String] ?? []
         guard tags.allSatisfy(PatrolLibrary.isSupportedTag) else { return nil }
@@ -231,6 +237,7 @@ struct PatrolEvent: Sendable {
     let dominantPrey: String?
 
     var isRomance: Bool { tags.contains("romance") }
+    var givesHerbs: Bool { (success + fail).contains { !$0.herbs.isEmpty } }
 
     private static let keys: Set<String> = [
         "event_id", "types", "location", "season", "tags", "patrol_art", "patrol_art_clean", "required_cat_types",

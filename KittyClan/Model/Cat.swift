@@ -71,3 +71,32 @@ extension CatAge {
         self = CatAge.allCases.first { $0.moons.contains(moons) } ?? .senior
     }
 }
+
+extension Cat {
+    /// Saves from earlier versions may lack newer fields, which then take their defaults.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(CatName.self, forKey: .name)
+        sex = try c.decode(Sex.self, forKey: .sex)
+        pronouns = try c.decode(Pronouns.self, forKey: .pronouns)
+        moons = try c.decode(Int.self, forKey: .moons)
+        appearance = try c.decode(CatAppearance.self, forKey: .appearance)
+        personality = try c.decode(Personality.self, forKey: .personality)
+        skills = try c.decodeIfPresent(CatSkills.self, forKey: .skills) ?? CatSkills()
+        rank = try c.decode(Rank.self, forKey: .rank)
+        origin = try c.decodeIfPresent(Origin.self, forKey: .origin) ?? .founder
+        experience = try c.decodeIfPresent(Int.self, forKey: .experience) ?? 0
+        mentor = try c.decodeIfPresent(UUID.self, forKey: .mentor)
+        apprentices = try c.decodeIfPresent([UUID].self, forKey: .apprentices) ?? []
+        formerApprentices = try c.decodeIfPresent([UUID].self, forKey: .formerApprentices) ?? []
+        formerMentors = try c.decodeIfPresent([UUID].self, forKey: .formerMentors) ?? []
+        parents = try c.decodeIfPresent([UUID].self, forKey: .parents) ?? []
+        mates = try c.decodeIfPresent([UUID].self, forKey: .mates) ?? []
+        previousMates = try c.decodeIfPresent([UUID].self, forKey: .previousMates) ?? []
+        birthCooldown = try c.decodeIfPresent(Int.self, forKey: .birthCooldown) ?? 0
+        conditions = try c.decodeIfPresent([CatCondition].self, forKey: .conditions) ?? []
+        isDead = try c.decodeIfPresent(Bool.self, forKey: .isDead) ?? false
+        diedAtClanAge = try c.decodeIfPresent(Int.self, forKey: .diedAtClanAge)
+    }
+}

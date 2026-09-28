@@ -13,7 +13,7 @@ final class PatrolTests: XCTestCase {
         let others = candidates.filter { cat in !adults.prefix(3).contains { $0.id == cat.id } }
         var clan = founding.found(
             prefix: "Test", leader: adults[0], deputy: adults[1], medicineCat: adults[2],
-            members: Array(others.prefix(7)), engine: Self.assets.engine, using: &rng
+            members: Array(others.prefix(7)), preyAndHerbs: false, engine: Self.assets.engine, using: &rng
         )
         for _ in 0..<moons { Self.assets.engine.advance(&clan, using: &rng) }
         return (clan, rng)

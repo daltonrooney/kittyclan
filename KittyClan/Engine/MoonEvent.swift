@@ -21,12 +21,13 @@ enum MoonEvent: Sendable {
     case joined(UUID, foundBy: UUID)
     case litterFound([UUID], foundBy: UUID)
     case noDeputy
+    case lowPrey
     /// A Clangen event whose text is filled in by the narrator.
     case story(StoryPick, LogEntry.Kind)
 
     var kind: LogEntry.Kind {
         switch self {
-        case .founded, .noDeputy: .info
+        case .founded, .noDeputy, .lowPrey: .info
         case .story(_, let kind): kind
         case .apprenticed, .newMentor, .graduated, .retired, .deputyAppointed, .becameLeader: .ceremony
         case .leaderLostLife, .died: .death
@@ -38,7 +39,7 @@ enum MoonEvent: Sendable {
 
     var cats: [UUID] {
         switch self {
-        case .founded, .noDeputy: []
+        case .founded, .noDeputy, .lowPrey: []
         case .apprenticed(let cat, let mentor, _): [cat] + [mentor].compactMap { $0 }
         case .story(let pick, _): pick.cats.sorted { $0.key < $1.key }.map(\.value)
         case .newMentor(let a, let m): [a, m]

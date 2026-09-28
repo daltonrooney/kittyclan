@@ -60,7 +60,7 @@ final class RelationshipTests: XCTestCase {
             let others = candidates.filter { cat in !adults.prefix(3).contains { $0.id == cat.id } }
             var clan = founding.found(
                 prefix: "Test", leader: adults[0], deputy: adults[1], medicineCat: adults[2],
-                members: Array(others.prefix(6)), engine: Self.assets.engine, using: &rng
+                members: Array(others.prefix(6)), preyAndHerbs: false, engine: Self.assets.engine, using: &rng
             )
             XCTAssertEqual(clan.relationships.count, clan.cats.count, "every founder has feelings about the others")
 

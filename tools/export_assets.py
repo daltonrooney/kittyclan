@@ -172,6 +172,11 @@ def export_text():
         *sorted((cond / "healed_and_death_strings").glob("*.json")),
         *sorted((cond / "risk_strings").glob("*.json")),
     ]
+    files["herbs"] = [
+        CLANGEN / "resources" / "dicts" / "herb_info.json",
+        cond / "herbs.en.json",
+        lang / "screens" / "med_den_messages.json",
+    ]
     files["injury"] = [lang / "events" / "injury" / "general.json", lang / "events" / "injury" / "forest.json"]
     patrols = lang / "patrols"
     files["patrols"] = [patrols / "new_cat.json", patrols / "new_cat_welcoming.json", patrols / "new_cat_hostile.json"]

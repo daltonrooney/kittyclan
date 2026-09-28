@@ -48,6 +48,8 @@ struct BasicNarrator: Narrator {
             "A litter of \(kits.count) kits has been taken in by the Clan."
         case .noDeputy:
             "There are no cats fit to become deputy."
+        case .lowPrey:
+            "\(clan.displayName) doesn't have enough prey for next moon!"
         case .story(let pick, _):
             pick.template
         }

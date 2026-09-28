@@ -71,6 +71,7 @@ struct PatrolEngine: Sendable {
 
         var candidates = library.patrols(for: type, season: clan.season).filter { $0.types.contains(type) }
         if type == .hunting { candidates = balanceHunting(candidates, clan: clan, using: &rng) }
+        if type == .herbGathering, candidates.contains(where: \.givesHerbs) { candidates = candidates.filter(\.givesHerbs) }
         if clan.living.count < 20, oneIn(4, &rng) { candidates += library.newCatPatrols.filter { $0.types.contains(type) } }
 
         let romance = candidates.filter(\.isRomance)
@@ -313,9 +314,7 @@ struct PatrolEngine: Sendable {
         results += meet(outcome, cats: cats, in: &clan)
         results += lose(outcome, cats: cats, in: &clan, using: &rng)
         results += injure(outcome, cats: cats, in: &clan, using: &rng)
-        if let size = outcome.preySize, succeeded || outcome.expGained > 0 {
-            results.append("A \(size) amount of prey is brought to camp.")
-        }
+        results += bringHome(outcome, patrol: session.cats, cats: cats, in: &clan, using: &rng)
         gainExperience(outcome, patrol: session.cats, in: &clan, using: &rng)
         mentorInfluence(session.cats, in: &clan, using: &rng)
         if !outcome.relationshipChanges.isEmpty {
@@ -477,6 +476,58 @@ struct PatrolEngine: Sendable {
                 }
                 if got { results.append("\(names([id], clan)) got: \(library.displayName(name)).") }
             }
+        }
+        return results
+    }
+
+    private static let preyModifiers: [String: Double] = ["tiny": 0.5, "small": 1, "medium": 1.8, "large": 2.4, "huge": 3.2]
+    private static let herbSizes: [String: Int] = ["tiny": 2, "small": 3, "medium": 4, "large": 6, "huge": 8]
+    private static let hunterExperienceBonus: [String: Double] = [
+        "untrained": 0.1, "learning": 1, "prepared": 2, "capable": 3, "proficient": 4, "adept": 5, "masterful": 6,
+    ]
+
+    /// Prey and herbs the patrol brings back. With prey and herbs on they go into the Clan's stores;
+    /// skilled hunters bring back more, and observant cats find more herbs.
+    private func bringHome(_ outcome: PatrolOutcome, patrol: [UUID], cats: [String: [UUID]], in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [String] {
+        var results: [String] = []
+        let members = patrol.compactMap { clan[$0] }
+        if let size = outcome.preySize, let modifier = Self.preyModifiers[size] {
+            if clan.preyAndHerbs {
+                var bonus = 0
+                var best = 0
+                for cat in members {
+                    guard let tier = cat.skills.tier(of: .HUNTER), tier > 0 else { continue }
+                    best = max(best, tier)
+                    bonus += Int((Self.hunterExperienceBonus[PatrolSlot.experienceLevel(cat.experience)] ?? 0) * (Double(tier) / 10 + 1))
+                }
+                var gained = 4 * modifier * Double(members.count) + Double(bonus)
+                if best > 0 { gained = Double(Int(gained * (Double(best) / 20 + 1))) }
+                clan.freshKill.add(gained.rounded())
+                clan.freshKill.log.append("\(Int(gained.rounded())) pieces of prey were caught on a patrol.")
+            }
+            results.append("A \(size) amount of prey is brought to camp.")
+        }
+        guard clan.preyAndHerbs, !outcome.herbs.isEmpty, let herbLibrary = engine.herbLibrary else { return results }
+        var found: [String: Int] = [:]
+        for block in outcome.herbs {
+            let quantity = members.reduce(0) { total, cat in
+                total + (Self.herbSizes[block.size] ?? 3) + Int.random(in: -1...1, using: &rng) + (cat.skills.tier(of: .SENSE) ?? 0)
+            }
+            if block.type == "random_herbs" {
+                guard let leader = cats["p_l"]?.first.flatMap({ clan[$0] }) else { continue }
+                found.merge(engine.findHerbs(by: leader, limit: quantity, in: clan, using: &rng), uniquingKeysWith: +)
+            } else if herbLibrary.herb(block.type) != nil, quantity > 0 {
+                found[block.type, default: 0] += quantity
+            }
+        }
+        for (herb, amount) in found { clan.herbs.add(herb, amount) }
+        if found.isEmpty {
+            results.append("Despite searching, no herbs were found.")
+        } else {
+            let herbs = herbLibrary.describe(found)
+            let total = found.values.reduce(0, +)
+            results.append("\(herbs.prefix(1).uppercased() + herbs.dropFirst()) \(total == 1 ? "was" : "were") gathered.")
+            clan.herbs.log.append("\(herbs.prefix(1).uppercased() + herbs.dropFirst()) \(total == 1 ? "was" : "were") gathered on patrol.")
         }
         return results
     }

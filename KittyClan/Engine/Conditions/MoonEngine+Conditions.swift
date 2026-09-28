@@ -63,7 +63,9 @@ extension MoonEngine {
             moonStart: clan.age, risks: info.risks, eventTriggered: eventTriggered,
             potentialScars: scars.flatMap { $0.isEmpty ? nil : $0 }
         ))
-        if !info.alsoGot.isEmpty, oneIn(5, &rng), let extra = info.alsoGot.randomElement(using: &rng) {
+        if !info.alsoGot.isEmpty, oneIn(5, &rng),
+           !(info.alsoGot.contains("blood loss") && stopBleeding(for: id, in: &clan, using: &rng)),
+           let extra = info.alsoGot.randomElement(using: &rng) {
             if library.conditions[extra]?.kind == .illness {
                 getIll(id, extra, eventTriggered: true, in: &clan, using: &rng)
             } else {
@@ -392,8 +394,11 @@ extension MoonEngine {
         guard let cat = clan[id], let library else { return [] }
         let roll = Int.random(in: 0..<450, using: &rng)
         let risky = ConditionLibrary.riskyTraits.contains(cat.personality.trait)
-        guard roll <= (risky ? 15 : 5), let pick = library.injuryEvent(for: cat, in: clan, using: &rng) else { return [] }
+        guard roll <= (risky ? 15 : 5),
+              let pick = library.injuryEvent(for: cat, in: clan, supplies: supplyCheck(for: clan, using: &rng), using: &rng)
+        else { return [] }
         applyInjuries(pick.injuries, cats: pick.cats, in: &clan, using: &rng)
+        applySupplies(pick.supplies, in: &clan, using: &rng)
         relationships?.apply(pick.relationshipChanges, cats: pick.allCats, in: &clan, using: &rng)
         var events: [MoonEvent] = [.story(pick, .health)]
         for victim in pick.deaths {

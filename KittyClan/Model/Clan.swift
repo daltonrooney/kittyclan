@@ -56,6 +56,14 @@ struct Clan: Codable, Sendable {
     /// How each cat feels about each other cat: `relationships[from][to]`.
     var relationships: [UUID: [UUID: Relationship]] = [:]
     var history: [MoonLog] = []
+    /// Clangen's expanded mode: a fresh-kill pile to feed the Clan, and herbs used in treatment.
+    var preyAndHerbs = false
+    /// Whether cats who go without food long enough die of starvation, as in Clangen.
+    var canStarve = false
+    var freshKill = FreshKillPile()
+    /// Each cat's nutrition, only tracked with prey and herbs on.
+    var nutrition: [UUID: Nutrition] = [:]
+    var herbs = HerbSupply()
 
     var displayName: String { prefix + "Clan" }
 
@@ -104,5 +112,29 @@ struct Clan: Codable, Sendable {
     /// grandparents, grandchildren, aunts, uncles, nieces, nephews and cousins.
     func areRelated(_ a: UUID, _ b: UUID) -> Bool {
         !family(of: a).isDisjoint(with: family(of: b))
+    }
+}
+
+extension Clan {
+    /// Saves from earlier versions may lack newer fields, which then take their defaults.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        prefix = try c.decode(String.self, forKey: .prefix)
+        age = try c.decodeIfPresent(Int.self, forKey: .age) ?? 0
+        cats = try c.decode([Cat].self, forKey: .cats)
+        leader = try c.decodeIfPresent(UUID.self, forKey: .leader)
+        deputy = try c.decodeIfPresent(UUID.self, forKey: .deputy)
+        leaderLives = try c.decodeIfPresent(Int.self, forKey: .leaderLives) ?? Self.maxLeaderLives
+        reputation = try c.decodeIfPresent(Int.self, forKey: .reputation) ?? 80
+        pregnancies = try c.decodeIfPresent([UUID: Pregnancy].self, forKey: .pregnancies) ?? [:]
+        outsiders = try c.decodeIfPresent([Cat].self, forKey: .outsiders) ?? []
+        patrolledThisMoon = try c.decodeIfPresent(Set<UUID>.self, forKey: .patrolledThisMoon) ?? []
+        relationships = try c.decodeIfPresent([UUID: [UUID: Relationship]].self, forKey: .relationships) ?? [:]
+        history = try c.decodeIfPresent([MoonLog].self, forKey: .history) ?? []
+        preyAndHerbs = try c.decodeIfPresent(Bool.self, forKey: .preyAndHerbs) ?? false
+        canStarve = try c.decodeIfPresent(Bool.self, forKey: .canStarve) ?? false
+        freshKill = try c.decodeIfPresent(FreshKillPile.self, forKey: .freshKill) ?? FreshKillPile()
+        nutrition = try c.decodeIfPresent([UUID: Nutrition].self, forKey: .nutrition) ?? [:]
+        herbs = try c.decodeIfPresent(HerbSupply.self, forKey: .herbs) ?? HerbSupply()
     }
 }

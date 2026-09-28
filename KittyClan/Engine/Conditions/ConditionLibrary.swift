@@ -14,7 +14,9 @@ struct ConditionInfo: Sendable {
     let infectiousness: Int
     let congenital: String
     let moonsUntil: Int
-    let hasHerbs: Bool
+    /// Herbs that treat it, by strength (1–3).
+    let herbs: [Int: [String]]
+    var hasHerbs: Bool { herbs.values.contains { !$0.isEmpty } }
 
     init(kind: ConditionKind, _ json: [String: Any]) {
         self.kind = kind
@@ -32,7 +34,7 @@ struct ConditionInfo: Sendable {
         congenital = json["congenital"] as? String ?? "never"
         moonsUntil = json["moons_until"] as? Int ?? 0
         let herbs = json["herbs"] as? [String: [String]] ?? [:]
-        hasHerbs = herbs.values.contains { !$0.isEmpty }
+        self.herbs = Dictionary(uniqueKeysWithValues: herbs.compactMap { key, value in Int(key).map { ($0, value) } })
     }
 }
 

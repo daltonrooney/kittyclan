@@ -13,7 +13,7 @@ final class ConditionTests: XCTestCase {
         let others = candidates.filter { cat in !adults.prefix(3).contains { $0.id == cat.id } }
         let clan = founding.found(
             prefix: "Test", leader: adults[0], deputy: adults[1], medicineCat: adults[2],
-            members: Array(others.prefix(6)), engine: engine, using: &rng
+            members: Array(others.prefix(6)), preyAndHerbs: false, engine: engine, using: &rng
         )
         return (clan, rng)
     }

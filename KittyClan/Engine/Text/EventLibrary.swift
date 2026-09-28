@@ -10,11 +10,28 @@ struct StoryPick: Sendable {
     var livesLost = LivesLost.one
     var relationshipChanges: [RelationshipChange] = []
     var injuries: [InjuryBlock] = []
+    var supplies: [SupplyBlock] = []
     /// Abbreviations that stand for several cats, e.g. `multi_cat`.
     var groupCats: [String: [UUID]] = [:]
 
     /// Every abbreviation with the cats it stands for.
     var allCats: [String: [UUID]] { cats.mapValues { [$0] }.merging(groupCats) { a, _ in a } }
+}
+
+/// An event `supplies` block: a condition on the prey pile or herb stores, and how it changes them.
+struct SupplyBlock: Sendable {
+    /// "freshkill", "all_herb", "any_herb" or a herb name.
+    let type: String
+    let triggers: [String]
+    /// e.g. "reduce_half", "increase_10", or "" for no change.
+    let adjust: String
+
+    init?(_ json: [String: Any]) {
+        guard let type = json["type"] as? String else { return nil }
+        self.type = type
+        triggers = json["trigger"] as? [String] ?? ["always"]
+        adjust = json["adjust"] as? String ?? ""
+    }
 }
 
 /// An event `injury` block: which cats get hurt, the possible injuries (or injury groups), and scar options.
@@ -122,21 +139,23 @@ struct EventLibrary: Sendable {
 
     // MARK: - Short events
 
-    func deathEvent(for cat: Cat, oldAge: Bool, in clan: Clan, using rng: inout some RandomNumberGenerator) -> StoryPick? {
+    typealias SupplyCheck = ([SupplyBlock]) -> Bool
+
+    func deathEvent(for cat: Cat, oldAge: Bool, in clan: Clan, supplies: SupplyCheck, using rng: inout some RandomNumberGenerator) -> StoryPick? {
         guard let pool = deaths[oldAge ? "old_age" : ""] else { return nil }
-        return shortEvent(from: pool, for: cat, in: clan, using: &rng)
+        return shortEvent(from: pool, for: cat, in: clan, supplies: supplies, using: &rng)
     }
 
-    func miscEvent(for cat: Cat, in clan: Clan, using rng: inout some RandomNumberGenerator) -> StoryPick? {
-        shortEvent(from: misc, for: cat, in: clan, using: &rng)
+    func miscEvent(for cat: Cat, in clan: Clan, supplies: SupplyCheck, using rng: inout some RandomNumberGenerator) -> StoryPick? {
+        shortEvent(from: misc, for: cat, in: clan, supplies: supplies, using: &rng)
     }
 
-    func injuryEvent(for cat: Cat, in clan: Clan, using rng: inout some RandomNumberGenerator) -> StoryPick? {
-        shortEvent(from: injuryEvents, for: cat, in: clan, using: &rng)
+    func injuryEvent(for cat: Cat, in clan: Clan, supplies: SupplyCheck, using rng: inout some RandomNumberGenerator) -> StoryPick? {
+        shortEvent(from: injuryEvents, for: cat, in: clan, supplies: supplies, using: &rng)
     }
 
     /// Clangen's `create_short_event`: roll a frequency, filter, pick by weight, then find an `r_c`.
-    private func shortEvent(from pool: [Int: [ShortEvent]], for cat: Cat, in clan: Clan, using rng: inout some RandomNumberGenerator) -> StoryPick? {
+    private func shortEvent(from pool: [Int: [ShortEvent]], for cat: Cat, in clan: Clan, supplies: SupplyCheck, using rng: inout some RandomNumberGenerator) -> StoryPick? {
         let roll = Int.random(in: 1...10, using: &rng)
         let preferred = roll <= 4 ? 4 : roll <= 7 ? 3 : roll <= 9 ? 2 : 1
         let season = clan.season.rawValue.lowercased()
@@ -147,6 +166,7 @@ struct EventLibrary: Sendable {
                     && Constraint.namedRolesExist(in: event.text, clan: clan)
                     && event.main.matches(cat, allowNewborn: false)
                     && event.injuries.allSatisfy { !$0.cats.contains("m_c") || $0.allows(cat) }
+                    && supplies(event.supplies)
             }
             while !candidates.isEmpty {
                 let event = candidates.remove(at: weighted(Array(zip(candidates.indices, candidates.map(\.weight))), &rng))
@@ -222,6 +242,7 @@ private struct ShortEvent: Sendable {
     let randomDies: Bool
     let relationshipChanges: [RelationshipChange]
     let injuries: [InjuryBlock]
+    let supplies: [SupplyBlock]
     let weight: Int
 
     private static let keys: Set<String> = [
@@ -230,10 +251,9 @@ private struct ShortEvent: Sendable {
     ]
 
     init?(_ json: [String: Any]) {
-        // Supply changes are ignored until KittyClan tracks prey and herbs, so only unconditional ones pass.
-        let supplies = json["supplies"] as? [[String: Any]] ?? []
-        guard Set(json.keys).isSubset(of: Self.keys),
-              supplies.allSatisfy({ ($0["trigger"] as? [String]) == ["always"] }),
+        let supplyJSON = json["supplies"] as? [[String: Any]] ?? []
+        let supplies = supplyJSON.compactMap(SupplyBlock.init)
+        guard Set(json.keys).isSubset(of: Self.keys), supplies.count == supplyJSON.count,
               let text = (json["event_text"] ?? json["death_text"]) as? String,
               Constraint.textIsSupported(text, allowing: ["m_c", "r_c"])
         else { return nil }
@@ -272,6 +292,7 @@ private struct ShortEvent: Sendable {
         randomDies = randomJSON?["dies"] as? Bool ?? false
         relationshipChanges = changes
         self.injuries = injuries
+        self.supplies = supplies
 
         var weight = 1
         if location != ["any"] { weight += 1 }
@@ -305,6 +326,6 @@ private struct ShortEvent: Sendable {
             return nil
         }
         let lives: StoryPick.LivesLost = tags.contains("all_lives") ? .all : tags.contains("some_lives") ? .some : .one
-        return StoryPick(template: text, cats: cats, deaths: deaths, livesLost: lives, relationshipChanges: relationshipChanges, injuries: injuries)
+        return StoryPick(template: text, cats: cats, deaths: deaths, livesLost: lives, relationshipChanges: relationshipChanges, injuries: injuries, supplies: supplies)
     }
 }

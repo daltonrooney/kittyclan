@@ -27,7 +27,8 @@ struct GameAssets: Sendable {
         let relationships = RelationshipEngine(library: try InteractionLibrary(directory: text), template: template)
         let engine = MoonEngine(
             factory: factory, narrator: narrator, library: library, relationships: relationships,
-            conditions: try ConditionLibrary(directory: text)
+            conditions: try ConditionLibrary(directory: text),
+            herbLibrary: try HerbLibrary(directory: text)
         )
         let patrolLibrary = try PatrolLibrary(directory: text, artDirectory: Bundle.main.url(forResource: "PatrolArt", withExtension: nil))
         return GameAssets(
