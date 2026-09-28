@@ -45,8 +45,12 @@ struct ClangenNarrator: Narrator {
         let cats = pick.cats.compactMapValues { clan[$0] }
         var extras = extras
         for (abbr, ids) in pick.groupCats {
-            extras[abbr] = template.list(ids.compactMap { clan[$0] })
+            let cats = ids.compactMap { clan[$0] }
+            extras[abbr] = template.list(cats)
+            if abbr.hasPrefix("n_c:"), let first = cats.first {
+                extras["n_c_pre:" + abbr.dropFirst(4)] = first.name.prefix
+            }
         }
-        return template.resolve(pick.template, cats: cats, clan: clan, extras: extras)
+        return template.resolve(pick.template, cats: cats, clan: clan, otherClan: clan.otherClan(pick.otherClan)?.name, extras: extras)
     }
 }

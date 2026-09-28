@@ -12,6 +12,7 @@ extension LogEntry.Kind {
         case .interaction: "bubble.left.and.bubble.right.fill"
         case .health: "cross.case.fill"
         case .patrol: "figure.walk"
+        case .clans: "flag.2.crossed.fill"
         }
     }
 
@@ -26,6 +27,7 @@ extension LogEntry.Kind {
         case .interaction: .orange
         case .health: .green
         case .patrol: .brown
+        case .clans: .indigo
         }
     }
 
@@ -40,6 +42,7 @@ extension LogEntry.Kind {
         case .interaction: "Interaction"
         case .health: "Health"
         case .patrol: "Patrol"
+        case .clans: "Other Clans"
         }
     }
 }

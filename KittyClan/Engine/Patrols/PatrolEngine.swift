@@ -4,6 +4,8 @@ import Foundation
 struct PatrolSession: Sendable {
     let type: PatrolType
     let cats: [UUID]
+    /// The neighbouring Clan this patrol may meet (`o_c_n`).
+    let otherClan: UUID?
     let patrol: PatrolEvent
     /// Abbreviation → cats, e.g. `p_l`, `r_c0`, `patrol_cats`, `apprentice`.
     var involved: [String: [UUID]]
@@ -69,10 +71,17 @@ struct PatrolEngine: Sendable {
             involved["some_patrol"] = Array(catIDs.shuffled(using: &rng).prefix(count))
         }
 
-        var candidates = library.patrols(for: type, season: clan.season).filter { $0.types.contains(type) }
+        if clan.otherClans.isEmpty { clan.otherClans = engine.generateOtherClans(for: clan, using: &rng) }
+        let otherClan = clan.otherClans.randomElement(using: &rng)
+        var candidates = library.patrols(for: type, season: clan.season)
         if type == .hunting { candidates = balanceHunting(candidates, clan: clan, using: &rng) }
+        if let otherClan {
+            candidates += library.otherClanPatrols[""] ?? []
+            if otherClan.standing != .neutral { candidates += library.otherClanPatrols[otherClan.standing.rawValue] ?? [] }
+        }
+        candidates += outsiderPatrols(in: clan, using: &rng)
+        candidates = candidates.filter { $0.types.contains(type) }
         if type == .herbGathering, candidates.contains(where: \.givesHerbs) { candidates = candidates.filter(\.givesHerbs) }
-        if clan.living.count < 20, oneIn(4, &rng) { candidates += library.newCatPatrols.filter { $0.types.contains(type) } }
 
         let romance = candidates.filter(\.isRomance)
         let normal = candidates.filter { !$0.isRomance }
@@ -94,11 +103,23 @@ struct PatrolEngine: Sendable {
         clan.patrolledThisMoon.formUnion(catIDs)
         let art = library.artURL(patrol.art) != nil ? patrol.art : PatrolLibrary.introArt(for: type)
         return PatrolSession(
-            type: type, cats: catIDs, patrol: patrol, involved: involved,
-            intro: resolve(introText, involved, clan: clan, using: &rng), introArt: art,
+            type: type, cats: catIDs, otherClan: otherClan?.id, patrol: patrol, involved: involved,
+            intro: resolve(introText, involved, clan: clan, otherClan: otherClan?.id, using: &rng), introArt: art,
             success: success, fail: fail,
             antagSuccess: antagSuccess, antagFail: antagFail
         )
+    }
+
+    /// Clangen's outsider patrols: likelier for small Clans, and hostile or welcoming ones by reputation.
+    private func outsiderPatrols(in clan: Clan, using rng: inout some RandomNumberGenerator) -> [PatrolEvent] {
+        let small = clan.living.count < 20
+        let (odds, extra): (Int, String?) = switch clan.reputation {
+        case ...30: (small ? 2 : 32, "hostile")
+        case ...70: (small ? 2 : 4, nil)
+        default: (2, "welcoming")
+        }
+        guard oneIn(odds, &rng) else { return [] }
+        return (library.newCatPatrols[""] ?? []) + (extra.flatMap { library.newCatPatrols[$0] } ?? [])
     }
 
     /// Rank lists Clangen's `required_cat_types` refers to.
@@ -295,7 +316,7 @@ struct PatrolEngine: Sendable {
     func finish(_ session: PatrolSession, choice: PatrolChoice, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> PatrolResult {
         if choice == .decline {
             let text = session.patrol.decline.randomElement(using: &rng) ?? "The patrol turns back."
-            return PatrolResult(text: resolve(text, session.involved, clan: clan, using: &rng), results: [], art: nil, succeeded: false)
+            return PatrolResult(text: resolve(text, session.involved, clan: clan, otherClan: session.otherClan, using: &rng), results: [], art: nil, succeeded: false)
         }
 
         let antagonize = choice == .antagonize && session.canAntagonize
@@ -306,7 +327,7 @@ struct PatrolEngine: Sendable {
 
         var cats = session.involved.merging(outcomeCats) { _, new in new }
         cats = createCats(for: outcome.slots, involved: cats, in: &clan, using: &rng)
-        let text = resolve(outcome.strings.randomElement(using: &rng) ?? "", cats, clan: clan, using: &rng)
+        let text = resolve(outcome.strings.randomElement(using: &rng) ?? "", cats, clan: clan, otherClan: session.otherClan, using: &rng)
 
         var results: [String] = []
         results += join(outcome, cats: cats, in: &clan, using: &rng)
@@ -315,6 +336,14 @@ struct PatrolEngine: Sendable {
         results += lose(outcome, cats: cats, in: &clan, using: &rng)
         results += injure(outcome, cats: cats, in: &clan, using: &rng)
         results += bringHome(outcome, patrol: session.cats, cats: cats, in: &clan, using: &rng)
+        if let other = session.otherClan, let name = clan.otherClan(other)?.name, outcome.relationsChange != 0 {
+            clan.changeRelations(with: other, by: outcome.relationsChange)
+            results.append("Relations with \(name) have \(outcome.relationsChange > 0 ? "improved" : "worsened").")
+        }
+        if outcome.reputationChange != 0 {
+            clan.changeReputation(by: outcome.reputationChange)
+            results.append("Your Clan's reputation towards outsiders has \(outcome.reputationChange > 0 ? "improved" : "worsened").")
+        }
         gainExperience(outcome, patrol: session.cats, in: &clan, using: &rng)
         mentorInfluence(session.cats, in: &clan, using: &rng)
         if !outcome.relationshipChanges.isEmpty {
@@ -441,18 +470,7 @@ struct PatrolEngine: Sendable {
         for block in outcome.lost {
             var lost: [UUID] = []
             for id in targets(block.cats, cats) where clan.isAlive(id) {
-                MoonEngine.removeMentor(from: id, in: &clan)
-                if let cat = clan[id] {
-                    for apprentice in cat.apprentices {
-                        MoonEngine.removeMentor(from: apprentice, in: &clan)
-                        MoonEngine.assignMentor(to: apprentice, in: &clan, using: &rng)
-                    }
-                }
-                guard let index = clan.index(of: id) else { continue }
-                let cat = clan.cats.remove(at: index)
-                clan.outsiders.append(cat)
-                if clan.leader == id { clan.leader = nil }
-                if clan.deputy == id { clan.deputy = nil }
+                engine.loseCat(id, in: &clan, using: &rng)
                 lost.append(id)
             }
             if !lost.isEmpty { results.append("\(names(lost, clan)) \(lost.count == 1 ? "has" : "have") been lost.") }
@@ -562,7 +580,7 @@ struct PatrolEngine: Sendable {
         abbr == "p_l" || (abbr.count == 4 && ["r_c", "s_c", "n_c"].contains(String(abbr.prefix(3))) && abbr.last!.isNumber)
     }
 
-    private func resolve(_ text: String, _ involved: [String: [UUID]], clan: Clan, using rng: inout some RandomNumberGenerator) -> String {
+    private func resolve(_ text: String, _ involved: [String: [UUID]], clan: Clan, otherClan: UUID?, using rng: inout some RandomNumberGenerator) -> String {
         var cats: [String: Cat] = [:]
         for (abbr, ids) in involved where ids.count == 1 && Self.isRole(abbr) {
             if let cat = clan[ids[0]] { cats[abbr] = cat }
@@ -571,6 +589,6 @@ struct PatrolEngine: Sendable {
         for (abbr, options) in library.prey where text.contains(abbr) {
             extras[abbr] = options.randomElement(using: &rng)
         }
-        return template.resolve(text, cats: cats, clan: clan, extras: extras)
+        return template.resolve(text, cats: cats, clan: clan, otherClan: clan.otherClan(otherClan)?.name, extras: extras)
     }
 }

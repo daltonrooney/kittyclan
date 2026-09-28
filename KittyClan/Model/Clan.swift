@@ -30,6 +30,8 @@ struct LogEntry: Codable, Hashable, Sendable, Identifiable {
         case health
         /// What happened on a patrol the player sent out.
         case patrol
+        /// News about neighbouring Clans: wars and the leader's den.
+        case clans
     }
 
     var id = UUID()
@@ -64,6 +66,11 @@ struct Clan: Codable, Sendable {
     /// Each cat's nutrition, only tracked with prey and herbs on.
     var nutrition: [UUID: Nutrition] = [:]
     var herbs = HerbSupply()
+    var otherClans: [OtherClan] = []
+    var war = War()
+    /// This moon's leader's den choices: one about another Clan, one about an outsider.
+    var leaderDenPlan: LeaderDenPlan?
+    var outsiderDenPlan: LeaderDenPlan?
 
     var displayName: String { prefix + "Clan" }
 
@@ -86,6 +93,29 @@ struct Clan: Codable, Sendable {
     func isAlive(_ id: UUID?) -> Bool {
         guard let id else { return false }
         return cats.first { $0.id == id }?.isAlive ?? false
+    }
+
+    func otherClan(_ id: UUID?) -> OtherClan? {
+        otherClans.first { $0.id == id }
+    }
+
+    mutating func changeRelations(with id: UUID, by amount: Int) {
+        guard let i = otherClans.firstIndex(where: { $0.id == id }) else { return }
+        otherClans[i].changeRelations(by: amount)
+    }
+
+    /// Outsider reputation, kept between 0 and 100.
+    mutating func changeReputation(by amount: Int) {
+        reputation = min(max(reputation + amount, 0), 100)
+    }
+
+    /// Clangen's outsider reputation bands.
+    var reputationStanding: String {
+        switch reputation {
+        case ...30: "hostile"
+        case ...70: "neutral"
+        default: "welcoming"
+        }
     }
 
     func relationship(from: UUID, to: UUID) -> Relationship? {
@@ -136,5 +166,9 @@ extension Clan {
         freshKill = try c.decodeIfPresent(FreshKillPile.self, forKey: .freshKill) ?? FreshKillPile()
         nutrition = try c.decodeIfPresent([UUID: Nutrition].self, forKey: .nutrition) ?? [:]
         herbs = try c.decodeIfPresent(HerbSupply.self, forKey: .herbs) ?? HerbSupply()
+        otherClans = try c.decodeIfPresent([OtherClan].self, forKey: .otherClans) ?? []
+        war = try c.decodeIfPresent(War.self, forKey: .war) ?? War()
+        leaderDenPlan = try c.decodeIfPresent(LeaderDenPlan.self, forKey: .leaderDenPlan)
+        outsiderDenPlan = try c.decodeIfPresent(LeaderDenPlan.self, forKey: .outsiderDenPlan)
     }
 }

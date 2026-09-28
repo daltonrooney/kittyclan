@@ -179,7 +179,16 @@ def export_text():
     ]
     files["injury"] = [lang / "events" / "injury" / "general.json", lang / "events" / "injury" / "forest.json"]
     patrols = lang / "patrols"
-    files["patrols"] = [patrols / "new_cat.json", patrols / "new_cat_welcoming.json", patrols / "new_cat_hostile.json"]
+    files["patrols"] = [
+        patrols / "new_cat.json", patrols / "new_cat_welcoming.json", patrols / "new_cat_hostile.json",
+        patrols / "other_clan.json", patrols / "other_clan_hostile.json", patrols / "other_clan_ally.json",
+    ]
+    events = lang / "events"
+    files["war"] = [events / "war.json"]
+    files["leader_den/success"] = sorted((events / "leader_den" / "success").glob("*.json"))
+    files["leader_den/fail"] = sorted((events / "leader_den" / "fail").glob("*.json"))
+    files["new_cat"] = [events / "new_cat" / "general.json", events / "new_cat" / "forest.json"]
+    files["outsider_deaths"] = [events / "death" / "outsider_deaths" / "outsider_deaths.json"]
     files["patrols/general"] = sorted((patrols / "general").glob("*.json"))
     for folder in ("hunting", "border", "training", "med"):
         files[f"patrols/forest/{folder}"] = sorted((patrols / "forest" / folder).glob("*.json"))

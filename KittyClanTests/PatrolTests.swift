@@ -20,7 +20,7 @@ final class PatrolTests: XCTestCase {
     }
 
     private func assertResolved(_ text: String, file: StaticString = #filePath, line: UInt = #line) {
-        let leftovers = ["{", "p_l", "r_c", "s_c", "n_c", "f_tp", "f_mp", "c_n", "cat_to", "cat_from"]
+        let leftovers = ["{", "p_l", "r_c", "s_c", "n_c", "f_tp", "f_mp", "c_n", "o_c_n", "cat_to", "cat_from"]
         for token in leftovers where text.contains(token) {
             XCTFail("unresolved \(token): \(text)", file: file, line: line)
         }

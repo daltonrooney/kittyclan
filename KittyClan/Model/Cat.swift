@@ -59,8 +59,20 @@ struct Cat: Identifiable, Codable, Hashable, Sendable {
     var isDead = false
     var diedAtClanAge: Int?
 
+    /// Outsiders only: lost from the Clan, exiled from it, or driven out of the area.
+    var isLost = false
+    var isExiled = false
+    var isNear = true
+    /// The rank a former Clan cat held before leaving, restored if they return.
+    var lastClanRank: Rank?
+
     var age: CatAge { CatAge(moons: moons) }
     var isAlive: Bool { !isDead }
+
+    var isFormerClanCat: Bool { lastClanRank != nil }
+
+    /// An outsider's way of life: loner, rogue or kittypet.
+    var social: Origin { [.loner, .rogue, .kittypet].contains(origin) ? origin : .loner }
 
     /// Clangen's `can_have_mate`: not a newborn, kitten or adolescent.
     var isMateAge: Bool { ![.newborn, .kitten, .adolescent].contains(age) }
@@ -98,5 +110,9 @@ extension Cat {
         conditions = try c.decodeIfPresent([CatCondition].self, forKey: .conditions) ?? []
         isDead = try c.decodeIfPresent(Bool.self, forKey: .isDead) ?? false
         diedAtClanAge = try c.decodeIfPresent(Int.self, forKey: .diedAtClanAge)
+        isLost = try c.decodeIfPresent(Bool.self, forKey: .isLost) ?? false
+        isExiled = try c.decodeIfPresent(Bool.self, forKey: .isExiled) ?? false
+        isNear = try c.decodeIfPresent(Bool.self, forKey: .isNear) ?? true
+        lastClanRank = try c.decodeIfPresent(Rank.self, forKey: .lastClanRank)
     }
 }

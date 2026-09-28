@@ -392,13 +392,15 @@ extension MoonEngine {
     /// Clangen's `handle_injuries`: 6 in 450 each moon, 16 in 450 for risk-taking personalities.
     func rollInjury(for id: UUID, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [MoonEvent] {
         guard let cat = clan[id], let library else { return [] }
-        let roll = Int.random(in: 0..<450, using: &rng)
+        let roll = Int.random(in: 0..<(clan.war.isGoingBadly ? 225 : 450), using: &rng)
         let risky = ConditionLibrary.riskyTraits.contains(cat.personality.trait)
+        var counts: [UUID: Int] = [:]
         guard roll <= (risky ? 15 : 5),
-              let pick = library.injuryEvent(for: cat, in: clan, supplies: supplyCheck(for: clan, using: &rng), using: &rng)
+              var pick = library.injuryEvent(for: cat, in: clan, context: eventContext(for: clan, using: &rng), using: &rng),
+              addNewCats(to: &pick, in: &clan, counts: &counts, using: &rng) != nil
         else { return [] }
         applyInjuries(pick.injuries, cats: pick.cats, in: &clan, using: &rng)
-        applySupplies(pick.supplies, in: &clan, using: &rng)
+        applyEventEffects(pick, in: &clan, using: &rng)
         relationships?.apply(pick.relationshipChanges, cats: pick.allCats, in: &clan, using: &rng)
         var events: [MoonEvent] = [.story(pick, .health)]
         for victim in pick.deaths {

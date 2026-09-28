@@ -22,10 +22,15 @@ struct MoonEngine: Sendable {
         clan.age += 1
         clan.patrolledThisMoon = []
         for id in clan.pregnancies.keys { clan.pregnancies[id]?.moons += 1 }
+        if clan.otherClans.isEmpty { clan.otherClans = generateOtherClans(for: clan, using: &rng) }
+        events += checkWar(in: &clan, using: &rng)
+        let denTarget: UUID? = if case .outsider(let id)? = clan.outsiderDenPlan?.target { id } else { nil }
+        events += resolveLeaderDen(in: &clan, using: &rng)
+        var interactions: [UUID: Int] = [:]
+        events += lostCatReturns(in: &clan, counts: &interactions, using: &rng)
         freshKillMoon(in: &clan, using: &rng)
 
         var someoneJoined = false
-        var interactions: [UUID: Int] = [:]
         for id in clan.living.map(\.id) {
             guard let i = clan.index(of: id), clan.cats[i].isAlive else { continue }
             var skip: Set<String> = []
@@ -66,17 +71,25 @@ struct MoonEngine: Sendable {
                 continue
             }
 
-            if !someoneJoined, let joined = invite(by: id, in: &clan, using: &rng) {
-                events += joined
-                someoneJoined = true
-                for newcomer in joined.flatMap(\.newcomers) {
-                    events += relationships?.welcome(newcomer, in: &clan, counts: &interactions, using: &rng) ?? []
+            if !someoneJoined {
+                if library != nil {
+                    if let arrival = newCatEvent(by: id, in: &clan, counts: &interactions, using: &rng) {
+                        events += arrival
+                        someoneJoined = true
+                    }
+                } else if let joined = invite(by: id, in: &clan, using: &rng) {
+                    events += joined
+                    someoneJoined = true
+                    for newcomer in joined.flatMap(\.newcomers) {
+                        events += relationships?.welcome(newcomer, in: &clan, counts: &interactions, using: &rng) ?? []
+                    }
                 }
             }
             if oneIn(30, &rng), let cat = clan[id],
-               let pick = library?.miscEvent(for: cat, in: clan, supplies: supplyCheck(for: clan, using: &rng), using: &rng) {
+               var pick = library?.miscEvent(for: cat, in: clan, context: eventContext(for: clan, using: &rng), using: &rng),
+               addNewCats(to: &pick, in: &clan, counts: &interactions, using: &rng) != nil {
                 relationships?.apply(pick.relationshipChanges, cats: pick.allCats, in: &clan, using: &rng)
-                applySupplies(pick.supplies, in: &clan, using: &rng)
+                applyEventEffects(pick, in: &clan, using: &rng)
                 applyInjuries(pick.injuries, cats: pick.cats, in: &clan, using: &rng)
                 events.append(.story(pick, .info))
             }
@@ -88,6 +101,7 @@ struct MoonEngine: Sendable {
                 if clan.isAlive(id) { events += deathRolls(for: id, in: &clan, using: &rng) }
             }
         }
+        events += outsiderMoon(in: &clan, skipping: denTarget, using: &rng)
         herbMoon(in: &clan, using: &rng)
         if clan.preyAndHerbs {
             updateNutrition(in: &clan)
@@ -108,6 +122,22 @@ struct MoonEngine: Sendable {
             }
         }
         clan.history.append(MoonLog(moon: clan.age, entries: entries))
+    }
+
+    /// The Clan and supply levels an event may refer to this draw.
+    func eventContext(for clan: Clan, using rng: inout some RandomNumberGenerator) -> EventLibrary.Context {
+        let (other, war) = otherClanForEvent(in: clan, using: &rng)
+        return EventLibrary.Context(
+            otherClan: other, war: war, warGoingWell: clan.war.trend == .relUp,
+            supplies: supplyCheck(for: clan, using: &rng)
+        )
+    }
+
+    /// Supply, relations and reputation changes from a short event.
+    func applyEventEffects(_ pick: StoryPick, in clan: inout Clan, using rng: inout some RandomNumberGenerator) {
+        applySupplies(pick.supplies, in: &clan, using: &rng)
+        if let other = pick.otherClan, pick.relationsChange != 0 { clan.changeRelations(with: other, by: pick.relationsChange) }
+        if pick.reputationChange != 0 { clan.changeReputation(by: pick.reputationChange) }
     }
 
     // MARK: - Experience
@@ -353,14 +383,15 @@ struct MoonEngine: Sendable {
 
     private func deathRolls(for id: UUID, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [MoonEvent] {
         guard let cat = clan[id], cat.isAlive else { return [] }
-        if clan.leader == id, !cat.isNotWorking, oneIn(50, &rng) {
+        let badWar = clan.war.isGoingBadly
+        if clan.leader == id, !cat.isNotWorking, oneIn(badWar ? 15 : 50, &rng) {
             return die(id, cause: .misfortune, in: &clan, using: &rng)
         }
         let oldAge = pow(1.0045, Double(cat.moons - 150)) - 1
         if cat.moons >= 300 || (oldAge > 0 && Double.random(in: 0..<1, using: &rng) <= oldAge) {
             return die(id, cause: .oldAge, in: &clan, using: &rng)
         }
-        if !cat.isNotWorking, oneIn(500, &rng) {
+        if !cat.isNotWorking, oneIn(badWar ? 170 : 500, &rng) {
             return die(id, cause: .misfortune, in: &clan, using: &rng)
         }
         return rollInjury(for: id, in: &clan, using: &rng)
@@ -368,14 +399,16 @@ struct MoonEngine: Sendable {
 
     /// Picks a Clangen death event for the cat if one fits, otherwise a plain death.
     private func die(_ id: UUID, cause: DeathCause, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [MoonEvent] {
+        var counts: [UUID: Int] = [:]
         guard let cat = clan[id],
-              let pick = library?.deathEvent(for: cat, oldAge: cause == .oldAge, in: clan, supplies: supplyCheck(for: clan, using: &rng), using: &rng),
-              pick.deaths.contains(id)
+              var pick = library?.deathEvent(for: cat, oldAge: cause == .oldAge, in: clan, context: eventContext(for: clan, using: &rng), using: &rng),
+              pick.deaths.contains(id),
+              addNewCats(to: &pick, in: &clan, counts: &counts, using: &rng) != nil
         else { return loseLifeOrDie(id, cause: cause, in: &clan, using: &rng) }
 
         relationships?.apply(pick.relationshipChanges, cats: pick.allCats, in: &clan, using: &rng)
         applyInjuries(pick.injuries, cats: pick.cats, in: &clan, using: &rng)
-        applySupplies(pick.supplies, in: &clan, using: &rng)
+        applyEventEffects(pick, in: &clan, using: &rng)
         var events: [MoonEvent] = [.story(pick, .death)]
         for victim in pick.deaths {
             let lives: Int = if victim != clan.leader {

@@ -141,6 +141,8 @@ struct PatrolOutcome: Sendable {
     let meet: [PatrolTargets]
     let joins: [(cats: [String], statuses: [String], changeName: Bool)]
     let preySize: String?
+    let relationsChange: Int
+    let reputationChange: Int
     /// Herb blocks: "random_herbs" or a herb name, with a size such as "medium".
     let herbs: [(type: String, size: String)]
     let tags: [String]
@@ -156,7 +158,6 @@ struct PatrolOutcome: Sendable {
 
     init?(_ json: [String: Any], patrolSlots: Set<String>) {
         guard Set(json.keys).isSubset(of: Self.keys),
-              (json["reputation_changes"] as? [String: Any])?["other_clan"] == nil,
               Constraint.listAllows(json["location"] as? [String], "forest", normalize: { String($0.split(separator: ":")[0]) })
         else { return nil }
 
@@ -190,6 +191,10 @@ struct PatrolOutcome: Sendable {
             guard let cats = block["cats"] as? [String] else { return nil }
             return (cats, block["new_status"] as? [String] ?? [], block["change_name"] as? Bool ?? false)
         }
+
+        let reputation = json["reputation_changes"] as? [String: Any]
+        relationsChange = reputation?["other_clan"] as? Int ?? 0
+        reputationChange = reputation?["outsider"] as? Int ?? 0
 
         let supply = json["supply"] as? [[String: Any]] ?? []
         preySize = supply.first { $0["type"] as? String == "freshkill" }
@@ -303,7 +308,8 @@ struct PatrolEvent: Sendable {
 /// Clangen's forest and general patrols, plus the new-cat patrols.
 struct PatrolLibrary: @unchecked Sendable {
     private let patrols: [String: [PatrolEvent]]
-    let newCatPatrols: [PatrolEvent]
+    let newCatPatrols: [String: [PatrolEvent]]
+    let otherClanPatrols: [String: [PatrolEvent]]
     let prey: [String: [String]]
     private let artDirectory: URL?
 
@@ -322,7 +328,8 @@ struct PatrolLibrary: @unchecked Sendable {
             patrols["\(type.folder)/general"] = load("general/\(type.folder).json")
         }
         self.patrols = patrols
-        newCatPatrols = load("new_cat.json") + load("new_cat_welcoming.json")
+        newCatPatrols = ["": load("new_cat.json"), "welcoming": load("new_cat_welcoming.json"), "hostile": load("new_cat_hostile.json")]
+        otherClanPatrols = ["": load("other_clan.json"), "ally": load("other_clan_ally.json"), "hostile": load("other_clan_hostile.json")]
         prey = (try? JSONSerialization.jsonObject(with: Data(contentsOf: directory.appending(path: "patrols/prey.json")))) as? [String: [String]] ?? [:]
         self.artDirectory = artDirectory
     }
@@ -362,7 +369,7 @@ struct PatrolLibrary: @unchecked Sendable {
     }
 
     private static let blocked = [
-        "o_c_n", "POI", "_list", "acc_", "given_herb", "mur_c", "multi_cat", "%{", "n_c:", "patrol_cats", "some_patrol",
+        "POI", "_list", "acc_", "given_herb", "mur_c", "multi_cat", "%{", "n_c:", "patrol_cats", "some_patrol",
     ]
     nonisolated(unsafe) private static let abbreviationPattern = try! Regex(#"\b(p_l|[rsn]_c\d?|m_c)\b"#)
 

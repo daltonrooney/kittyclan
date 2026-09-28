@@ -46,7 +46,7 @@ struct TextTemplate: Sendable {
     /// - Parameters:
     ///   - cats: abbreviation → cat, e.g. `["m_c": leader, "r_c": mentor]`.
     ///   - extras: other literal replacements, e.g. `["r_h": "bravery", "(old_name)": "Firepaw"]`.
-    func resolve(_ text: String, cats: [String: Cat], clan: Clan, extras: [String: String] = [:]) -> String {
+    func resolve(_ text: String, cats: [String: Cat], clan: Clan, otherClan: String? = nil, extras: [String: String] = [:]) -> String {
         var cats = cats
         for (abbr, id) in [("lead_name", clan.leader), ("dep_name", clan.deputy)] {
             if let cat = clan[id], cat.isAlive { cats[abbr] = cat }
@@ -58,8 +58,9 @@ struct TextTemplate: Sendable {
         for (abbr, cat) in cats { replacements[abbr] = names.display(cat.name, rank: cat.rank) }
 
         var output = resolveTags(text, cats: cats)
+        if let otherClan { output = replaceClanName(output, otherClan, token: "o_c_n") }
         output = replaceAbbreviations(output, replacements)
-        return replaceClanName(output, clan.displayName)
+        return replaceClanName(output, clan.displayName, token: "c_n")
     }
 
     /// Clangen's `adjust_list_text`: "A", "A and B", or "A, B, and C".
@@ -132,10 +133,10 @@ struct TextTemplate: Sendable {
         return output
     }
 
-    /// Replaces `c_n` with the Clan name, turning a preceding "a" into "an" before a vowel.
-    private func replaceClanName(_ text: String, _ clanName: String) -> String {
+    /// Replaces `c_n` (or `o_c_n`) with a Clan name, turning a preceding "a" into "an" before a vowel.
+    private func replaceClanName(_ text: String, _ clanName: String, token: String) -> String {
         let startsWithVowel = clanName.first.map { "AEIOU".contains($0.uppercased()) } ?? false
-        var parts = text.components(separatedBy: "c_n")
+        var parts = text.components(separatedBy: token)
         guard parts.count > 1 else { return text }
         for i in 0..<(parts.count - 1) where startsWithVowel {
             if parts[i].hasSuffix(" a ") { parts[i] = String(parts[i].dropLast(2)) + "an " }
