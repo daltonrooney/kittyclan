@@ -27,7 +27,10 @@ struct GameAssets: Sendable {
             renderer: renderer,
             factory: factory,
             founding: ClanFounding(factory: factory),
-            engine: MoonEngine(factory: factory, narrator: narrator, library: library, relationships: relationships)
+            engine: MoonEngine(
+                factory: factory, narrator: narrator, library: library, relationships: relationships,
+                conditions: try ConditionLibrary(directory: text)
+            )
         )
     }
 
@@ -37,7 +40,25 @@ struct GameAssets: Sendable {
         names.display(cat.name, rank: cat.rank)
     }
 
+    /// The cat's sprite at an age. At its current age a sick or paralyzed cat uses Clangen's special poses.
     func sprite(for cat: Cat, age: CatAge? = nil) -> CGImage? {
-        try? renderer.render(cat.appearance, age: age ?? cat.age).cgImage()
+        try? renderer.render(cat.appearance, poseName: Self.poseName(for: cat, age: age ?? cat.age)).cgImage()
+    }
+
+    static func poseName(for cat: Cat, age: CatAge) -> String {
+        guard age == cat.age, age != .newborn, cat.isAlive else { return cat.appearance.pose(for: age) }
+        if cat.isNotWorking {
+            return switch age {
+            case .kitten: "sick_kitten0"
+            case .adolescent: "sick_adolescent0"
+            case .senior: "sick_senior0"
+            default: "sick_adult0"
+            }
+        }
+        if cat.isParalyzed {
+            if age == .kitten || age == .adolescent { return "para_young0" }
+            return cat.appearance.length == .long ? "para_adult_long0" : "para_adult_short0"
+        }
+        return cat.appearance.pose(for: age)
     }
 }

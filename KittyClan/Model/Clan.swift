@@ -26,6 +26,8 @@ struct LogEntry: Codable, Hashable, Sendable, Identifiable {
         case ceremony, birth, death, join, relationship, info
         /// Everyday interactions between cats, which change how they feel about each other.
         case interaction
+        /// Injuries, illnesses and recoveries.
+        case health
     }
 
     var id = UUID()

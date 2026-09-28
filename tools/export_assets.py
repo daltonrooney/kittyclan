@@ -163,6 +163,16 @@ def export_text():
             folder = str(path.parent.relative_to(lang / "events"))
             files.setdefault(folder, []).append(path)
     files["relationship_events"] = [rel / "become_mates.json", rel / "become_mates_poly.json", rel / "breakup_mates.json"]
+    dicts = CLANGEN / "resources" / "dicts" / "conditions"
+    cond = lang / "conditions"
+    files["conditions"] = [
+        dicts / "injuries.json", dicts / "illnesses.json", dicts / "permanent_conditions.json", dicts / "illnesses_seasons.json",
+        cond / "injuries.en.json", cond / "illnesses.en.json", cond / "permanent_conditions.en.json",
+        *sorted((cond / "condition_got_strings").glob("*.json")),
+        *sorted((cond / "healed_and_death_strings").glob("*.json")),
+        *sorted((cond / "risk_strings").glob("*.json")),
+    ]
+    files["injury"] = [lang / "events" / "injury" / "general.json", lang / "events" / "injury" / "forest.json"]
     files[""].append(lang / "relationships.en.json")
 
     for folder, paths in files.items():

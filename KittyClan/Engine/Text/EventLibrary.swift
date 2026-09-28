@@ -9,11 +9,34 @@ struct StoryPick: Sendable {
     var deaths: [UUID] = []
     var livesLost = LivesLost.one
     var relationshipChanges: [RelationshipChange] = []
+    var injuries: [InjuryBlock] = []
     /// Abbreviations that stand for several cats, e.g. `multi_cat`.
     var groupCats: [String: [UUID]] = [:]
 
     /// Every abbreviation with the cats it stands for.
     var allCats: [String: [UUID]] { cats.mapValues { [$0] }.merging(groupCats) { a, _ in a } }
+}
+
+/// An event `injury` block: which cats get hurt, the possible injuries (or injury groups), and scar options.
+struct InjuryBlock: Sendable {
+    let cats: [String]
+    let injuries: [String]
+    let scars: [String]
+
+    init?(_ json: [String: Any]) {
+        guard let cats = json["cats"] as? [String], let injuries = json["injuries"] as? [String] else { return nil }
+        self.cats = cats
+        self.injuries = injuries
+        scars = json["scars"] as? [String] ?? []
+    }
+
+    /// Clangen refuses events that would mangle a missing tail or tear a missing ear.
+    func allows(_ cat: Cat) -> Bool {
+        let scars = Set(cat.appearance.scars)
+        if injuries.contains("mangled tail"), !scars.isDisjoint(with: ["NOTAIL", "HALFTAIL"]) { return false }
+        if injuries.contains("torn ear"), scars.contains("NOEAR") { return false }
+        return true
+    }
 }
 
 /// Clangen's ceremony, death and misc event text, filtered to the features KittyClan simulates.
@@ -26,6 +49,7 @@ struct EventLibrary: Sendable {
     /// Short events keyed by sub-type ("" or "old_age") then frequency.
     private let deaths: [String: [Int: [ShortEvent]]]
     private let misc: [Int: [ShortEvent]]
+    private let injuryEvents: [Int: [ShortEvent]]
     let announcements: [String]
     let twoParentBirths: [String]
     let kitAmount: [String: String]
@@ -49,6 +73,7 @@ struct EventLibrary: Sendable {
         let deathEvents = try events("death/general.json", "death/forest.json").compactMap(ShortEvent.init)
         deaths = Dictionary(grouping: deathEvents, by: \.subType).mapValues(group)
         misc = group(try events("misc/general.json", "misc/forest.json").compactMap(ShortEvent.init).filter { $0.subType.isEmpty })
+        injuryEvents = group(try events("injury/general.json", "injury/forest.json").compactMap(ShortEvent.init).filter { $0.subType.isEmpty })
 
         let pregnancy = try load("pregnancy.json") as? [String: Any] ?? [:]
         announcements = pregnancy["announcement"] as? [String] ?? []
@@ -59,6 +84,7 @@ struct EventLibrary: Sendable {
     var ceremonyCounts: [String: Int] { ceremonies.mapValues(\.count) }
     var deathCount: Int { deaths.values.flatMap(\.values).reduce(0) { $0 + $1.count } }
     var miscCount: Int { misc.values.reduce(0) { $0 + $1.count } }
+    var injuryCount: Int { injuryEvents.values.reduce(0) { $0 + $1.count } }
 
     // MARK: - Ceremonies
 
@@ -105,6 +131,10 @@ struct EventLibrary: Sendable {
         shortEvent(from: misc, for: cat, in: clan, using: &rng)
     }
 
+    func injuryEvent(for cat: Cat, in clan: Clan, using rng: inout some RandomNumberGenerator) -> StoryPick? {
+        shortEvent(from: injuryEvents, for: cat, in: clan, using: &rng)
+    }
+
     /// Clangen's `create_short_event`: roll a frequency, filter, pick by weight, then find an `r_c`.
     private func shortEvent(from pool: [Int: [ShortEvent]], for cat: Cat, in clan: Clan, using rng: inout some RandomNumberGenerator) -> StoryPick? {
         let roll = Int.random(in: 1...10, using: &rng)
@@ -116,6 +146,7 @@ struct EventLibrary: Sendable {
                     && Constraint.tagsAllow(event.tags, in: clan, cat: cat)
                     && Constraint.namedRolesExist(in: event.text, clan: clan)
                     && event.main.matches(cat, allowNewborn: false)
+                    && event.injuries.allSatisfy { !$0.cats.contains("m_c") || $0.allows(cat) }
             }
             while !candidates.isEmpty {
                 let event = candidates.remove(at: weighted(Array(zip(candidates.indices, candidates.map(\.weight))), &rng))
@@ -190,11 +221,12 @@ private struct ShortEvent: Sendable {
     let random: Constraint?
     let randomDies: Bool
     let relationshipChanges: [RelationshipChange]
+    let injuries: [InjuryBlock]
     let weight: Int
 
     private static let keys: Set<String> = [
         "event_id", "location", "season", "frequency", "sub_type", "tags", "event_text", "death_text",
-        "m_c", "r_c", "history", "relationships", "exclude_involved", "supplies",
+        "m_c", "r_c", "history", "relationships", "exclude_involved", "supplies", "injury",
     ]
 
     init?(_ json: [String: Any]) {
@@ -224,6 +256,10 @@ private struct ShortEvent: Sendable {
         if !main.relationshipStatus.isEmpty, random == nil { return nil }
         let changes = (json["relationships"] as? [[String: Any]] ?? []).compactMap(RelationshipChange.init)
         guard changes.count == (json["relationships"] as? [Any])?.count ?? 0 else { return nil }
+        let injuries = (json["injury"] as? [[String: Any]] ?? []).compactMap(InjuryBlock.init)
+        guard injuries.count == (json["injury"] as? [Any])?.count ?? 0,
+              injuries.allSatisfy({ Set($0.cats).isSubset(of: ["m_c", "r_c"]) })
+        else { return nil }
 
         subType = subTypes.first ?? ""
         frequency = json["frequency"] as? Int ?? 4
@@ -235,6 +271,7 @@ private struct ShortEvent: Sendable {
         self.random = random
         randomDies = randomJSON?["dies"] as? Bool ?? false
         relationshipChanges = changes
+        self.injuries = injuries
 
         var weight = 1
         if location != ["any"] { weight += 1 }
@@ -252,10 +289,13 @@ private struct ShortEvent: Sendable {
         var cats = ["m_c": cat.id]
         var deaths: [UUID] = mainDies ? [cat.id] : []
         if let random {
+            let romance = tags.contains("romance")
             let options = clan.living.filter { other in
                 other.id != cat.id && random.matches(other, allowNewborn: false)
                     && main.relationshipHolds(from: cat, to: other, in: clan)
                     && random.relationshipHolds(from: other, to: cat, in: clan)
+                    && injuries.allSatisfy { !$0.cats.contains("r_c") || $0.allows(other) }
+                    && (!romance || clan.isPotentialMate(cat, other, forLoveInterest: true))
             }
             guard let other = options.randomElement(using: &rng) else { return nil }
             cats["r_c"] = other.id
@@ -265,6 +305,6 @@ private struct ShortEvent: Sendable {
             return nil
         }
         let lives: StoryPick.LivesLost = tags.contains("all_lives") ? .all : tags.contains("some_lives") ? .some : .one
-        return StoryPick(template: text, cats: cats, deaths: deaths, livesLost: lives, relationshipChanges: relationshipChanges)
+        return StoryPick(template: text, cats: cats, deaths: deaths, livesLost: lives, relationshipChanges: relationshipChanges, injuries: injuries)
     }
 }

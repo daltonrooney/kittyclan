@@ -80,7 +80,7 @@ final class MoonEngineTests: XCTestCase {
             for log in clan.history {
                 for entry in log.entries {
                     XCTAssertFalse(entry.text.isEmpty)
-                    XCTAssertFalse(entry.text.contains("{"), "unresolved template: \(entry.text)")
+                    XCTAssertFalse(entry.text.contains("{") || entry.text.contains("%{"), "unresolved template: \(entry.text)")
                     XCTAssertFalse(entry.text.contains("m_c") || entry.text.contains("r_c") || entry.text.contains("multi_cat") || entry.text.contains("cat_to"), "unresolved name: \(entry.text)")
                 }
             }

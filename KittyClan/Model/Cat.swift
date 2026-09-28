@@ -53,6 +53,7 @@ struct Cat: Identifiable, Codable, Hashable, Sendable {
     var mates: [UUID] = []
     var previousMates: [UUID] = []
     var birthCooldown = 0
+    var conditions: [CatCondition] = []
 
     var isDead = false
     var diedAtClanAge: Int?
