@@ -8,7 +8,7 @@ settings:
     DEVELOPMENT_TEAM: GR76S8DM44
     SWIFT_VERSION: "6.0"
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    CURRENT_PROJECT_VERSION: "2"
 targets:
   KittyClan:
     type: application
