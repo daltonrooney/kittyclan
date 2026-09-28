@@ -9,6 +9,8 @@ struct GameAssets: Sendable {
     let engine: MoonEngine
     let patrols: PatrolEngine
     let skillText: SkillText
+    let camps: CampLibrary
+    let afterlifeText: AfterlifeText
 
     static func loadBundled() throws -> GameAssets {
         let renderer = try CatRenderer.bundled()
@@ -28,7 +30,8 @@ struct GameAssets: Sendable {
         let engine = MoonEngine(
             factory: factory, narrator: narrator, library: library, relationships: relationships,
             conditions: try ConditionLibrary(directory: text),
-            herbLibrary: try HerbLibrary(directory: text)
+            herbLibrary: try HerbLibrary(directory: text),
+            ceremonies: try LeaderCeremonyLibrary(directory: text)
         )
         let patrolLibrary = try PatrolLibrary(directory: text, artDirectory: Bundle.main.url(forResource: "PatrolArt", withExtension: nil))
         return GameAssets(
@@ -37,7 +40,9 @@ struct GameAssets: Sendable {
             founding: ClanFounding(factory: factory),
             engine: engine,
             patrols: PatrolEngine(library: patrolLibrary, engine: engine, template: template),
-            skillText: try SkillText(url: text.appending(path: "skills.en.json"))
+            skillText: try SkillText(url: text.appending(path: "skills.en.json")),
+            camps: try CampLibrary.bundled(),
+            afterlifeText: try AfterlifeText(directory: text, template: template)
         )
     }
 
@@ -48,8 +53,15 @@ struct GameAssets: Sendable {
     }
 
     /// The cat's sprite at an age. At its current age a sick or paralyzed cat uses Clangen's special poses.
+    /// Dead cats are drawn in their afterlife's style, fogged as they fade.
     func sprite(for cat: Cat, age: CatAge? = nil) -> CGImage? {
-        try? renderer.render(cat.appearance, poseName: Self.poseName(for: cat, age: age ?? cat.age)).cgImage()
+        let ghost = cat.afterlife.map { CatRenderer.Ghost(afterlife: $0, fadeStage: cat.fadeStage) }
+        return try? renderer.render(cat.appearance, poseName: Self.poseName(for: cat, age: age ?? cat.age), ghost: ghost).cgImage()
+    }
+
+    /// The silhouette left by a cat who has faded.
+    func sprite(for faded: FadedCat) -> CGImage? {
+        try? renderer.renderFaded(age: CatAge(moons: faded.moons), afterlife: faded.afterlife).cgImage()
     }
 
     static func poseName(for cat: Cat, age: CatAge) -> String {

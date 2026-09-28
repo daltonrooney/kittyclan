@@ -67,10 +67,17 @@ struct Clan: Codable, Sendable {
     var nutrition: [UUID: Nutrition] = [:]
     var herbs = HerbSupply()
     var otherClans: [OtherClan] = []
+    /// Which of Clangen's four forest camps the Clan lives in (1–4).
+    var camp = 1
     var war = War()
     /// This moon's leader's den choices: one about another Clan, one about an outsider.
     var leaderDenPlan: LeaderDenPlan?
     var outsiderDenPlan: LeaderDenPlan?
+    /// The StarClan (or Dark Forest) cat who guides the Clan. The Clan's dead follow it.
+    var guide: UUID?
+    /// Clangen's `fading` setting: long-dead cats fade from the afterlife.
+    var fading = true
+    var faded: [FadedCat] = []
 
     var displayName: String { prefix + "Clan" }
 
@@ -167,8 +174,12 @@ extension Clan {
         nutrition = try c.decodeIfPresent([UUID: Nutrition].self, forKey: .nutrition) ?? [:]
         herbs = try c.decodeIfPresent(HerbSupply.self, forKey: .herbs) ?? HerbSupply()
         otherClans = try c.decodeIfPresent([OtherClan].self, forKey: .otherClans) ?? []
+        camp = try c.decodeIfPresent(Int.self, forKey: .camp) ?? 1
         war = try c.decodeIfPresent(War.self, forKey: .war) ?? War()
         leaderDenPlan = try c.decodeIfPresent(LeaderDenPlan.self, forKey: .leaderDenPlan)
         outsiderDenPlan = try c.decodeIfPresent(LeaderDenPlan.self, forKey: .outsiderDenPlan)
+        guide = try c.decodeIfPresent(UUID.self, forKey: .guide)
+        fading = try c.decodeIfPresent(Bool.self, forKey: .fading) ?? true
+        faded = try c.decodeIfPresent([FadedCat].self, forKey: .faded) ?? []
     }
 }

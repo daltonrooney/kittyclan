@@ -1,12 +1,13 @@
 import Foundation
 import Observation
 
-/// State for ClanGen's founding flow: name the Clan, then choose its cats.
+/// State for ClanGen's founding flow: name the Clan, choose its cats, its camp, then how it lives.
 @MainActor
 @Observable
 final class FoundingModel {
     enum Step: Hashable {
         case chooseCats
+        case camp
         case options
     }
 
@@ -24,6 +25,8 @@ final class FoundingModel {
         didSet { if !preyAndHerbs { canStarve = false } }
     }
     var canStarve = false
+    /// Which of Clangen's four forest camps the Clan settles in (1–4).
+    var camp = 1
     private(set) var candidates: [Cat] = []
     private(set) var selection = FoundingSelection()
     private(set) var rerollsLeft = ClanFounding.rerolls
@@ -64,9 +67,14 @@ final class FoundingModel {
         path = [.chooseCats]
     }
 
+    func showCamp() {
+        guard canFound else { return }
+        path = [.chooseCats, .camp]
+    }
+
     func showOptions() {
         guard canFound else { return }
-        path = [.chooseCats, .options]
+        path = [.chooseCats, .camp, .options]
     }
 
     func toggle(_ cat: Cat) {
@@ -111,6 +119,7 @@ final class FoundingModel {
             members: selection.members.compactMap(cat),
             preyAndHerbs: preyAndHerbs,
             canStarve: canStarve,
+            camp: camp,
             engine: assets.engine,
             using: &rng
         )

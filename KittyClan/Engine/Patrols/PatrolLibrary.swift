@@ -121,9 +121,13 @@ struct PatrolSlot: Sendable {
 /// A patrol outcome block: the cats it targets.
 struct PatrolTargets: Sendable {
     let cats: [String]
+    /// Death or scar history text, where `m_c` is the cat it belongs to.
+    let history: String?
+
     init?(_ json: [String: Any]) {
         guard let cats = json["cats"] as? [String] else { return nil }
         self.cats = cats
+        history = json["history"] as? String
     }
 }
 

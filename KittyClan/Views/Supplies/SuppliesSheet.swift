@@ -19,13 +19,12 @@ struct SuppliesSheet: View {
                         .id(Self.medicineDen)
                 }
             }
-            #if DEBUG
             .task {
-                if UserDefaults.standard.string(forKey: "supplies") == "herbs" {
+                if model.suppliesStartsAtHerbs {
+                    model.suppliesStartsAtHerbs = false
                     proxy.scrollTo(Self.medicineDen, anchor: .top)
                 }
             }
-            #endif
             }
             .navigationTitle("Supplies")
             .toolbarTitleDisplayMode(.inline)

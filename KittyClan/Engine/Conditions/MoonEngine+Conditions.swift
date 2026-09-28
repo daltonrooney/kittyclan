@@ -177,7 +177,8 @@ extension MoonEngine {
                 let file = kind == .illness ? "illness_death_strings" : "injury_death_strings"
                 let fallback = kind == .illness ? "m_c was killed by {PRONOUN/m_c/poss} illness." : "m_c was killed by {PRONOUN/m_c/poss} injuries."
                 texts = [library.strings(file, current.name).randomElement(using: &rng) ?? fallback]
-                lifeEvents = loseLifeOrDie(id, cause: .misfortune, in: &clan, using: &rng).filter { if case .died = $0 { false } else { true } }
+                let history = kind == .illness ? "m_c died to an illness." : "m_c died to an injury."
+                lifeEvents = loseLifeOrDie(id, cause: .misfortune, history: history, in: &clan, using: &rng).filter { if case .died = $0 { false } else { true } }
                 break
             }
 
@@ -358,7 +359,8 @@ extension MoonEngine {
                 let display = library.displayName(current.name)
                 let isLeader = clan.leader == id && clan.leaderLives > 1
                 texts = [isLeader ? "m_c lost a life to \(display)." : "m_c died from complications caused by \(display)."]
-                events += loseLifeOrDie(id, cause: .misfortune, in: &clan, using: &rng).filter { if case .died = $0 { false } else { true } }
+                let history = "m_c died from complications caused by \(display)."
+                events += loseLifeOrDie(id, cause: .misfortune, history: history, in: &clan, using: &rng).filter { if case .died = $0 { false } else { true } }
                 break
             }
             if let text = giveRisks(current, for: id, healer: healer, skip: &skip, in: &clan, using: &rng) {
@@ -404,7 +406,8 @@ extension MoonEngine {
         relationships?.apply(pick.relationshipChanges, cats: pick.allCats, in: &clan, using: &rng)
         var events: [MoonEvent] = [.story(pick, .health)]
         for victim in pick.deaths {
-            events += loseLifeOrDie(victim, cause: .misfortune, in: &clan, using: &rng).filter { if case .died = $0 { false } else { true } }
+            let (history, involved) = pick.deathHistory(for: victim)
+            events += loseLifeOrDie(victim, cause: .misfortune, history: history, involved: involved, in: &clan, using: &rng).filter { if case .died = $0 { false } else { true } }
         }
         return events
     }

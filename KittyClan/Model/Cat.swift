@@ -58,6 +58,16 @@ struct Cat: Identifiable, Codable, Hashable, Sendable {
 
     var isDead = false
     var diedAtClanAge: Int?
+    var afterlife: Afterlife?
+    var deadFor = 0
+    var afterlifeAcceptance: String?
+    var deaths: [DeathRecord] = []
+    var starClanAffinity = 0
+    var darkForestAffinity = 0
+    var preventFading = false
+    /// A Clangen backstory key, e.g. `clan_guide3`.
+    var backstory: String?
+    var leaderCeremony: [CeremonyLine] = []
 
     /// Outsiders only: lost from the Clan, exiled from it, or driven out of the area.
     var isLost = false
@@ -110,6 +120,15 @@ extension Cat {
         conditions = try c.decodeIfPresent([CatCondition].self, forKey: .conditions) ?? []
         isDead = try c.decodeIfPresent(Bool.self, forKey: .isDead) ?? false
         diedAtClanAge = try c.decodeIfPresent(Int.self, forKey: .diedAtClanAge)
+        afterlife = try c.decodeIfPresent(Afterlife.self, forKey: .afterlife)
+        deadFor = try c.decodeIfPresent(Int.self, forKey: .deadFor) ?? 0
+        afterlifeAcceptance = try c.decodeIfPresent(String.self, forKey: .afterlifeAcceptance)
+        deaths = try c.decodeIfPresent([DeathRecord].self, forKey: .deaths) ?? []
+        starClanAffinity = try c.decodeIfPresent(Int.self, forKey: .starClanAffinity) ?? 0
+        darkForestAffinity = try c.decodeIfPresent(Int.self, forKey: .darkForestAffinity) ?? 0
+        preventFading = try c.decodeIfPresent(Bool.self, forKey: .preventFading) ?? false
+        backstory = try c.decodeIfPresent(String.self, forKey: .backstory)
+        leaderCeremony = try c.decodeIfPresent([CeremonyLine].self, forKey: .leaderCeremony) ?? []
         isLost = try c.decodeIfPresent(Bool.self, forKey: .isLost) ?? false
         isExiled = try c.decodeIfPresent(Bool.self, forKey: .isExiled) ?? false
         isNear = try c.decodeIfPresent(Bool.self, forKey: .isNear) ?? true

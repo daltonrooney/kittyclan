@@ -21,6 +21,15 @@ struct StoryPick: Sendable {
     var hiddenNewCats: Set<String> = []
     /// Abbreviations that stand for several cats, e.g. `multi_cat`.
     var groupCats: [String: [UUID]] = [:]
+    /// Death-history text by abbreviation; `m_c` in each means the cat it belongs to.
+    var deathHistories: [String: String] = [:]
+
+    /// The history text for a cat who died in this event, and the other cat involved.
+    func deathHistory(for id: UUID) -> (text: String?, involved: UUID?) {
+        guard let abbr = allCats.first(where: { $0.value.contains(id) })?.key else { return (nil, nil) }
+        let other = abbr == "m_c" ? cats["r_c"] : cats["m_c"]
+        return (deathHistories[abbr], other == id ? nil : other)
+    }
 
     /// Every abbreviation with the cats it stands for.
     var allCats: [String: [UUID]] { cats.mapValues { [$0] }.merging(groupCats) { a, _ in a } }
@@ -352,6 +361,7 @@ private struct ShortEvent: Sendable {
     let relationsChange: Int
     let reputationStandings: [String]
     let reputationChange: Int
+    let deathHistories: [String: String]
     let weight: Int
 
     private static let keys: Set<String> = [
@@ -448,6 +458,12 @@ private struct ShortEvent: Sendable {
         relationshipChanges = changes
         self.injuries = injuries
         self.supplies = supplies
+        var histories: [String: String] = [:]
+        for block in json["history"] as? [[String: Any]] ?? [] {
+            guard let death = block["death"] as? String else { continue }
+            for abbr in block["cats"] as? [String] ?? [] { histories[abbr] = death }
+        }
+        deathHistories = histories
 
         var weight = 1
         if !otherClanStandings.isEmpty { weight += (3 - otherClanStandings.count) * 5 }
@@ -484,6 +500,6 @@ private struct ShortEvent: Sendable {
         let lives: StoryPick.LivesLost = tags.contains("all_lives") ? .all : tags.contains("some_lives") ? .some : .one
         return StoryPick(template: text, cats: cats, deaths: deaths, livesLost: lives, relationshipChanges: relationshipChanges, injuries: injuries, supplies: supplies,
                          relationsChange: relationsChange, reputationChange: reputationChange,
-                         newCats: newCats, hiddenNewCats: hiddenNewCats)
+                         newCats: newCats, hiddenNewCats: hiddenNewCats, deathHistories: deathHistories)
     }
 }

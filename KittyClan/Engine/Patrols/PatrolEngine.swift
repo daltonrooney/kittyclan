@@ -433,8 +433,8 @@ struct PatrolEngine: Sendable {
         for block in outcome.deaths {
             var died: [UUID] = []
             for id in targets(block.cats, cats) {
-                if let index = clan.outsiders.firstIndex(where: { $0.id == id }) {
-                    clan.outsiders[index].isDead = true
+                if clan.outsiders.contains(where: { $0.id == id }) {
+                    clan.sendToAfterlife(id, history: block.history ?? "m_c died on a patrol.", using: &rng)
                     continue
                 }
                 guard clan.isAlive(id) else { continue }
@@ -445,7 +445,7 @@ struct PatrolEngine: Sendable {
                         clan.leaderLives -= Int.random(in: 2...(clan.leaderLives - 1), using: &rng) - 1
                     }
                 }
-                let events = engine.loseLifeOrDie(id, cause: .misfortune, in: &clan, using: &rng)
+                let events = engine.loseLifeOrDie(id, cause: .misfortune, history: block.history ?? "m_c died on a patrol.", in: &clan, using: &rng)
                 if events.contains(where: { if case .died = $0 { true } else { false } }) {
                     died.append(id)
                 } else if let cat = clan[id] {

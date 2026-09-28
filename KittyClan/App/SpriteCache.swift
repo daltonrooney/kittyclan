@@ -13,7 +13,8 @@ final class SpriteCache {
     }
 
     static func key(for cat: Cat, age: CatAge?) -> SpriteKey {
-        SpriteKey(cat: cat.id, age: age ?? cat.age, appearance: cat.appearance, pose: GameAssets.poseName(for: cat, age: age ?? cat.age))
+        SpriteKey(cat: cat.id, age: age ?? cat.age, appearance: cat.appearance, pose: GameAssets.poseName(for: cat, age: age ?? cat.age),
+                  ghost: cat.afterlife.map { CatRenderer.Ghost(afterlife: $0, fadeStage: cat.fadeStage) })
     }
 
     func cached(_ key: SpriteKey) -> CGImage? {

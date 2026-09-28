@@ -44,6 +44,7 @@ struct ClanFounding: Sendable {
         members: [Cat],
         preyAndHerbs: Bool = true,
         canStarve: Bool = false,
+        camp: Int = 1,
         engine: MoonEngine,
         using rng: inout some RandomNumberGenerator
     ) -> Clan {
@@ -64,6 +65,7 @@ struct ClanFounding: Sendable {
             MoonEngine.assignMentor(to: cat.id, in: &clan, using: &rng)
         }
         engine.relationships?.initializeFounders(&clan, using: &rng)
+        clan.camp = camp
         clan.preyAndHerbs = preyAndHerbs
         clan.canStarve = canStarve
         clan.herbs = engine.startingHerbs(clanSize: clan.living.count, using: &rng)
@@ -72,6 +74,8 @@ struct ClanFounding: Sendable {
             clan.freshKill.add(FreshKillPile.startingAmount)
             engine.updateNutrition(in: &clan)
         }
+        engine.makeGuide(for: &clan, using: &rng)
+        engine.crownLeader(leader.id, in: &clan, using: &rng)
         clan.history = [MoonLog(moon: 0, entries: [engine.narrator.entry(.founded, in: clan, using: &rng)])]
         return clan
     }

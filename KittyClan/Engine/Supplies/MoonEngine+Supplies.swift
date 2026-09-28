@@ -166,7 +166,7 @@ extension MoonEngine {
         if percentage <= 0 {
             let text = library.strings("illness_death_strings", "starving").randomElement(using: &rng) ?? "m_c starved to death."
             var events: [MoonEvent] = [.story(StoryPick(template: text, cats: ["m_c": id]), .death)]
-            events += loseLifeOrDie(id, cause: .misfortune, in: &clan, using: &rng).filter { if case .died = $0 { false } else { true } }
+            events += loseLifeOrDie(id, cause: .misfortune, history: "m_c starved to death when the Clan ran out of prey.", in: &clan, using: &rng).filter { if case .died = $0 { false } else { true } }
             if clan.isAlive(id) {
                 clan.nutrition[id]?.currentScore = entry.maxScore * 0.46
                 getIll(id, "malnourished", in: &clan, using: &rng)

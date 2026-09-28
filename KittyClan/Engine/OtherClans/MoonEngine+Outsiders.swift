@@ -141,13 +141,11 @@ extension MoonEngine {
             clan.outsiders[i] = cat
 
             guard cat.id != protected, Int.random(in: 0..<64, using: &rng) == 1 else { continue }
-            clan.outsiders[i].isDead = true
-            clan.outsiders[i].diedAtClanAge = clan.age
-            guard cat.isNear, let library else { continue }
             let key = cat.isExiled ? "exiled" : cat.isLost ? "lost" : cat.social.rawValue
-            if let line = (library.outsiderDeaths[key] ?? library.outsiderDeaths["default"])?.randomElement(using: &rng) {
-                events.append(.story(StoryPick(template: line, cats: ["m_c": cat.id]), .death))
-            }
+            let line = library.flatMap { ($0.outsiderDeaths[key] ?? $0.outsiderDeaths["default"])?.randomElement(using: &rng) }
+            clan.sendToAfterlife(cat.id, history: line, using: &rng)
+            guard cat.isNear, let line else { continue }
+            events.append(.story(StoryPick(template: line, cats: ["m_c": cat.id]), .death))
         }
         return events
     }
@@ -255,9 +253,8 @@ extension MoonEngine {
                    && (sex == nil || other.sex == sex) && (moons.map { CatAge(moons: $0) == other.age } ?? true)
                    && !earlier.flatMap({ $0 }).contains(other.id)
            }) {
-            if dead, let i = clan.outsiders.firstIndex(where: { $0.id == existing.id }) {
-                clan.outsiders[i].isDead = true
-                clan.outsiders[i].diedAtClanAge = clan.age
+            if dead {
+                clan.sendToAfterlife(existing.id, history: nil, using: &rng)
                 return ([existing.id], false)
             }
             if meeting { return ([existing.id], false) }
@@ -281,8 +278,7 @@ extension MoonEngine {
                 cat.name = factory.names.outsiderName(for: social, using: &rng)
             }
             if dead {
-                cat.isDead = true
-                cat.diedAtClanAge = clan.age
+                cat.enterAfterlife(clan.afterlife(for: cat, isOutsider: !joins), moon: clan.age, using: &rng)
             }
             if joins {
                 cat.rank = finalRank
@@ -337,8 +333,8 @@ extension MoonEngine {
         if plan.succeeded, let i = clan.outsiders.firstIndex(where: { $0.id == outsider }) {
             switch plan.interaction {
             case "hunt":
-                clan.outsiders[i].isDead = true
-                clan.outsiders[i].diedAtClanAge = clan.age
+                clan.sendToAfterlife(outsider, history: "m_c was hunted down by c_n.", using: &rng)
+                _ = i
             case "drive":
                 clan.outsiders[i].isNear = false
             default:

@@ -25,6 +25,12 @@ targets:
       - path: KittyClan/Resources/PatrolArt
         type: folder
         buildPhase: resources
+      - path: KittyClan/Resources/Camps
+        type: folder
+        buildPhase: resources
+      - path: KittyClan/Resources/Afterlife
+        type: folder
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.madebyraygun.kittyclan

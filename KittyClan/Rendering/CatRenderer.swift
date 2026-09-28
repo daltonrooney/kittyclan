@@ -24,11 +24,35 @@ final class CatRenderer: @unchecked Sendable {
         return try CatRenderer(atlas: atlas, recipeDirectory: recipes)
     }
 
-    func render(_ cat: CatAppearance, age: CatAge) throws -> PixelBuffer {
-        try render(cat, poseName: cat.pose(for: age))
+    /// How a dead cat is drawn: its afterlife's lineart and layers, and how far it has faded.
+    struct Ghost: Hashable, Sendable {
+        var afterlife: Afterlife
+        /// Clangen's fog stage 0–2, or nil before the cat starts fading.
+        var fadeStage: Int? = nil
     }
 
-    func render(_ cat: CatAppearance, poseName: String) throws -> PixelBuffer {
+    func render(_ cat: CatAppearance, age: CatAge, ghost: Ghost? = nil) throws -> PixelBuffer {
+        try render(cat, poseName: cat.pose(for: age), ghost: ghost)
+    }
+
+    /// Clangen's silhouette for a cat who has faded from the afterlife.
+    func renderFaded(age: CatAge, afterlife: Afterlife) throws -> PixelBuffer {
+        let stage = switch age {
+        case .newborn: "newborn"
+        case .kitten: "kitten"
+        case .adolescent: "adol"
+        case .senior: "senior"
+        default: "adult"
+        }
+        let suffix = switch afterlife {
+        case .starClan: ""
+        case .darkForest: "_df"
+        case .unknownResidence: "_ur"
+        }
+        return try atlas.sprite("faded_\(stage)\(suffix)", "", pose: 0)
+    }
+
+    func render(_ cat: CatAppearance, poseName: String, ghost: Ghost? = nil) throws -> PixelBuffer {
         let index = atlas.index
         guard let pose = index.poseIndex(poseName) else {
             throw SpriteError.unknownSprite(sheet: "poses", name: poseName)
@@ -77,11 +101,20 @@ final class CatRenderer: @unchecked Sendable {
             sprite.blit(try atlas.sprite("scars", scar, pose: pose))
         }
 
-        sprite.blit(try atlas.sprite("lineart", "", pose: pose))
+        let lineart = switch ghost?.afterlife {
+        case nil: "lineart"
+        case .starClan: "lineart_sc"
+        case .darkForest: "lineart_df"
+        case .unknownResidence: "lineart_ur"
+        }
+        sprite.blit(try atlas.sprite(lineart, "", pose: pose))
         sprite.blit(try atlas.sprite("skin", cat.skin, pose: pose))
 
+        let recolor = try ghost.map { try lineRecolor(for: $0.afterlife, pose: pose) }
         for scar in cat.scars where missingParts.contains(scar) {
-            sprite.blit(try atlas.sprite("scars_missing_part", scar, pose: pose), .minRGBA)
+            var layer = try atlas.sprite("scars_missing_part", scar, pose: pose)
+            recolor?(&layer)
+            sprite.blit(layer, .minRGBA)
         }
 
         // Clangen files "head" accessories under body, so only three categories draw.
@@ -89,11 +122,66 @@ final class CatRenderer: @unchecked Sendable {
             for accessory in cat.accessories {
                 guard let part = index.accessoryBodyParts[accessory], parts.contains(part) else { continue }
                 let sheet = index.plants.contains(accessory) ? "acc_plants" : "acc_wilds"
-                sprite.blit(try atlas.sprite(sheet, accessory, pose: pose))
+                var layer = try atlas.sprite(sheet, accessory, pose: pose)
+                recolor?(&layer)
+                sprite.blit(layer)
             }
         }
 
+        if let ghost {
+            sprite = try haunt(sprite, ghost, pose: pose)
+        }
         return cat.reverse ? sprite.flippedHorizontally() : sprite
+    }
+
+    // MARK: - Afterlife
+
+    /// Clangen's `_recolor_lineart`: opaque black outline pixels take the afterlife's line colour,
+    /// or for the Unknown Residence the matching pixel of its gradient.
+    private func lineRecolor(for afterlife: Afterlife, pose: Int) throws -> (inout PixelBuffer) -> Void {
+        let gradient = afterlife == .unknownResidence ? try atlas.sprite("line_ur_gradient", "", pose: pose) : nil
+        let color = afterlife == .starClan ? RGB(47, 51, 64) : RGB(30, 8, 11)
+        return { buffer in
+            for i in stride(from: 0, to: buffer.bytes.count, by: 4)
+            where buffer.bytes[i] == 0 && buffer.bytes[i + 1] == 0 && buffer.bytes[i + 2] == 0 && buffer.bytes[i + 3] == 255 {
+                if let gradient {
+                    for c in 0..<4 { buffer.bytes[i + c] = gradient.bytes[i + c] }
+                } else {
+                    buffer.bytes[i] = color.r
+                    buffer.bytes[i + 1] = color.g
+                    buffer.bytes[i + 2] = color.b
+                }
+            }
+        }
+    }
+
+    /// Clangen's fading fog, then the afterlife's underlay and overlay.
+    private func haunt(_ sprite: PixelBuffer, _ ghost: Ghost, pose: Int) throws -> PixelBuffer {
+        var sprite = sprite
+        if let stage = ghost.fadeStage {
+            sprite.blit(try atlas.sprite("fademask", "\(stage)", pose: pose), .maskRGBA)
+            let fog = switch ghost.afterlife {
+            case .starClan: "fadestarclan"
+            case .darkForest: "fadedarkforest"
+            case .unknownResidence: "fadeunknownresidence"
+            }
+            var underlay = try atlas.sprite(fog, "\(stage)", pose: pose)
+            underlay.blit(sprite)
+            sprite = underlay
+        }
+        var layered = PixelBuffer()
+        switch ghost.afterlife {
+        case .starClan:
+            layered.blit(sprite)
+            layered.blit(try atlas.sprite("line_sc_overlay", "", pose: pose))
+        case .unknownResidence:
+            layered.blit(try atlas.sprite("line_ur_underlay", "", pose: pose))
+            layered.blit(sprite)
+            layered.blit(try atlas.sprite("line_ur_overlay", "", pose: pose))
+        case .darkForest:
+            layered.blit(sprite)
+        }
+        return layered
     }
 
     // MARK: - Pelt recipes

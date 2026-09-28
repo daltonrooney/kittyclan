@@ -9,6 +9,7 @@ struct FoundingView: View {
                 .navigationDestination(for: FoundingModel.Step.self) { step in
                     switch step {
                     case .chooseCats: FoundingCatsStep(founding: founding)
+                    case .camp: FoundingCampStep(founding: founding)
                     case .options: FoundingOptionsStep(founding: founding)
                     }
                 }

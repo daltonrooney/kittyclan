@@ -8,6 +8,7 @@ struct MoonEngine: Sendable {
     var relationships: RelationshipEngine?
     var conditions: ConditionLibrary?
     var herbLibrary: HerbLibrary?
+    var ceremonies: LeaderCeremonyLibrary?
 
     private static let canHaveKits: Set<Rank> = [.leader, .deputy, .medicineCat, .warrior, .elder]
     private static let litterWeights: [CatAge: [Int]] = [
@@ -22,6 +23,7 @@ struct MoonEngine: Sendable {
         clan.age += 1
         clan.patrolledThisMoon = []
         for id in clan.pregnancies.keys { clan.pregnancies[id]?.moons += 1 }
+        afterlifeMoon(in: &clan, using: &rng)
         if clan.otherClans.isEmpty { clan.otherClans = generateOtherClans(for: clan, using: &rng) }
         events += checkWar(in: &clan, using: &rng)
         let denTarget: UUID? = if case .outsider(let id)? = clan.outsiderDenPlan?.target { id } else { nil }
@@ -166,7 +168,7 @@ struct MoonEngine: Sendable {
             setRank(.leader, for: id, in: &clan, using: &rng)
             clan.leader = id
             clan.deputy = nil
-            clan.leaderLives = Clan.maxLeaderLives
+            crownLeader(id, in: &clan, using: &rng)
             return [.becameLeader(id, oldName: oldName)]
         }
 
@@ -275,7 +277,7 @@ struct MoonEngine: Sendable {
                 let oldName = factory.names.display(heir.name, rank: heir.rank)
                 setRank(.leader, for: heir.id, in: &clan, using: &rng)
                 clan.leader = heir.id
-                clan.leaderLives = Clan.maxLeaderLives
+                crownLeader(heir.id, in: &clan, using: &rng)
                 return [.becameLeader(heir.id, oldName: oldName)] + promoteDeputy(in: &clan, using: &rng)
             }
         }
@@ -404,7 +406,7 @@ struct MoonEngine: Sendable {
               var pick = library?.deathEvent(for: cat, oldAge: cause == .oldAge, in: clan, context: eventContext(for: clan, using: &rng), using: &rng),
               pick.deaths.contains(id),
               addNewCats(to: &pick, in: &clan, counts: &counts, using: &rng) != nil
-        else { return loseLifeOrDie(id, cause: cause, in: &clan, using: &rng) }
+        else { return loseLifeOrDie(id, cause: cause, history: cause == .oldAge ? "m_c died of old age." : nil, in: &clan, using: &rng) }
 
         relationships?.apply(pick.relationshipChanges, cats: pick.allCats, in: &clan, using: &rng)
         applyInjuries(pick.injuries, cats: pick.cats, in: &clan, using: &rng)
@@ -420,23 +422,37 @@ struct MoonEngine: Sendable {
                 case .some: clan.leaderLives > 3 ? Int.random(in: 2..<(clan.leaderLives - 1), using: &rng) : 1
                 }
             }
-            if victim == clan.leader { clan.leaderLives -= lives - 1 }
-            let outcome = loseLifeOrDie(victim, cause: cause, in: &clan, using: &rng)
+            if victim == clan.leader {
+                clan.leaderLives -= lives - 1
+                if let i = clan.index(of: victim) {
+                    clan.cats[i].deaths += Array(repeating: DeathRecord(text: DeathRecord.multiLives, moon: clan.age), count: lives - 1)
+                }
+            }
+            let (history, involved) = pick.deathHistory(for: victim)
+            let outcome = loseLifeOrDie(victim, cause: cause, history: history, involved: involved, in: &clan, using: &rng)
             events += outcome.filter { if case .died = $0 { false } else { true } }
         }
         return events
     }
 
     /// Leaders lose one of their lives instead of dying, until the last one.
-    func loseLifeOrDie(_ id: UUID, cause: DeathCause, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [MoonEvent] {
+    /// - Parameters:
+    ///   - history: Clangen death-history text, with `m_c` for this cat and `r_c` for `involved`.
+    func loseLifeOrDie(
+        _ id: UUID, cause: DeathCause, history: String? = nil, involved: UUID? = nil,
+        in clan: inout Clan, using rng: inout some RandomNumberGenerator
+    ) -> [MoonEvent] {
         guard let i = clan.index(of: id) else { return [] }
         clan.cats[i].conditions.removeAll { $0.kind != .permanent }
+        let history = history ?? Self.defaultHistory[cause]
         if clan.leader == id {
             clan.leaderLives -= 1
-            if clan.leaderLives > 0 { return [.leaderLostLife(id, livesLeft: clan.leaderLives)] }
+            if clan.leaderLives > 0 {
+                clan.cats[i].deaths.append(DeathRecord(text: history ?? "m_c lost a life.", involved: involved, moon: clan.age))
+                return [.leaderLostLife(id, livesLeft: clan.leaderLives)]
+            }
         }
-        clan.cats[i].isDead = true
-        clan.cats[i].diedAtClanAge = clan.age
+        clan.sendToAfterlife(id, history: history, involved: involved, using: &rng)
         clan.pregnancies[id] = nil
         Self.removeMentor(from: id, in: &clan)
         for apprentice in clan.cats[i].apprentices {
@@ -446,4 +462,10 @@ struct MoonEngine: Sendable {
         if clan.leader == id { clan.leaderLives = 0 }
         return [.died(id, cause)]
     }
+
+    /// Death history used when no event supplies one.
+    static let defaultHistory: [DeathCause: String] = [
+        .oldAge: "m_c died of old age.",
+        .childbirth: "m_c died while kitting.",
+    ]
 }

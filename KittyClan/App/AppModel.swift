@@ -20,8 +20,15 @@ final class AppModel {
     var selectedCat: Cat?
     var patrol: PatrolModel?
     var isShowingSupplies = false
+    /// Scrolls the supplies sheet to the medicine den when it opens.
+    var suppliesStartsAtHerbs = false
+    var isShowingAbout = false
     var isShowingLeaderDen = false
     var leaderDenTab = LeaderDenTab.clans
+    /// Where each living cat sits in camp, in draw order. Re-rolled on entering camp and after each moon, as in Clangen.
+    private(set) var campPlacements: [CampPlacement] = []
+    /// Living cats who didn't fit in camp at the last roll.
+    private(set) var campOverflow = 0
 
     @ObservationIgnored private(set) var sprites: SpriteCache?
     @ObservationIgnored private let store: ClanStore
@@ -51,6 +58,7 @@ final class AppModel {
         guard let newClan = founding.makeClan() else { return }
         clan = newClan
         latestMoon = nil
+        rollCamp()
         state = .playing
         await save()
     }
@@ -62,7 +70,22 @@ final class AppModel {
         let advanced = await Self.advance(current, moons: 1, engine: assets.engine)
         clan = advanced
         latestMoon = advanced.age
+        rollCamp()
         await save()
+    }
+
+    /// Clangen's camp placement for the living Clan cats. Newborns stay hidden in the nursery.
+    func rollCamp() {
+        guard let assets, let clan else {
+            campPlacements = []
+            campOverflow = 0
+            return
+        }
+        var rng = SystemRandomNumberGenerator()
+        let living = clan.living
+        campPlacements = assets.camps.place(living, camp: clan.camp, using: &rng)
+            .map { CampPlacement(id: $0.cat, point: $0.point) }
+        campOverflow = max(0, living.count(where: { $0.rank != .newborn }) - campPlacements.count)
     }
 
     /// Cats who can still go on patrol this moon.
@@ -93,6 +116,7 @@ final class AppModel {
         defer { isAdvancing = false }
         let (updated, result) = await Self.finishPatrol(session, choice: choice, in: current, engine: assets.patrols)
         clan = updated
+        rollCamp()
         await save()
         return result
     }
@@ -169,6 +193,7 @@ final class AppModel {
         defer { isAdvancing = false }
         clan = await Self.exile(id, in: current, engine: assets.engine)
         selectedCat = nil
+        rollCamp()
         await save()
     }
 
@@ -274,6 +299,7 @@ final class AppModel {
         }
         clan = nil
         latestMoon = nil
+        campPlacements = []
         selectedCat = nil
         patrol = nil
         isShowingLeaderDen = false
@@ -372,7 +398,9 @@ extension AppModel {
     /// (picks cats and starts a patrol), `-patrolPickOnly YES` (stops at cat picking),
     /// `-patrolResult YES` (proceeds to the result), `-war YES` (starts a war with the first neighbour),
     /// `-outsiders YES` (exiles and loses a warrior if there are few outsiders, and expands the list),
-    /// `-leaderDen clans|outsiders` (opens the leader's den), `-leaderDenPlan YES` (queues a choice for each tab).
+    /// `-leaderDen clans|outsiders` (opens the leader's den), `-leaderDenPlan YES` (queues a choice for each tab),
+    /// `-camp 1…4` (the camp for `-autofound` or the founding flow), `-foundingStep camp`, `-about YES`.
+    /// The clan screen reads `-clanView camp|list` and `-denLabels YES|NO` straight from its `@AppStorage`.
     func applyDebugLaunchArguments() async {
         let defaults = UserDefaults.standard
         guard let assets else { return }
@@ -381,12 +409,16 @@ extension AppModel {
             let founding = FoundingModel(assets: assets)
             founding.autopick()
             founding.preyAndHerbs = !defaults.bool(forKey: "classic")
+            if let camp = debugCamp { founding.camp = camp }
             await found(from: founding)
         } else if case .founding(let founding) = state {
             switch defaults.string(forKey: "foundingStep") {
             case "cats":
                 founding.randomName()
                 founding.showCats()
+            case "camp":
+                founding.autopick()
+                founding.showCamp()
             case "options":
                 founding.autopick()
                 founding.showOptions()
@@ -394,6 +426,7 @@ extension AppModel {
                 break
             }
             if defaults.bool(forKey: "autopick") { founding.autopick() }
+            if let camp = debugCamp { founding.camp = camp }
         }
 
         let moons = defaults.integer(forKey: "timeskips")
@@ -407,6 +440,9 @@ extension AppModel {
         if defaults.bool(forKey: "feed") { await feed(hungryCats.map(\.id)) }
         selectedCat = debugCatToShow
         isShowingSupplies = defaults.string(forKey: "supplies") != nil
+        suppliesStartsAtHerbs = defaults.string(forKey: "supplies") == "herbs"
+        isShowingAbout = defaults.bool(forKey: "about")
+        rollCamp()
         await debugPatrol()
     }
 
@@ -453,6 +489,11 @@ extension AppModel {
         guard !defaults.bool(forKey: "patrolPickOnly") else { return }
         await patrol.start()
         if defaults.bool(forKey: "patrolResult") { await patrol.choose(.proceed) }
+    }
+
+    private var debugCamp: Int? {
+        let camp = UserDefaults.standard.integer(forKey: "camp")
+        return (1...CampLibrary.names.count).contains(camp) ? camp : nil
     }
 
     /// `-showCat first` opens the leader; `-showCat outsider` opens the first nearby outsider; `-showCat sick` opens the cat with the most known conditions; any other value opens the first cat whose name starts with it.

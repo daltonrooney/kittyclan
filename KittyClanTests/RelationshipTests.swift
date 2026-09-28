@@ -62,7 +62,7 @@ final class RelationshipTests: XCTestCase {
                 prefix: "Test", leader: adults[0], deputy: adults[1], medicineCat: adults[2],
                 members: Array(others.prefix(6)), preyAndHerbs: false, engine: Self.assets.engine, using: &rng
             )
-            XCTAssertEqual(clan.relationships.count, clan.cats.count, "every founder has feelings about the others")
+            XCTAssertEqual(clan.relationships.count, clan.living.count, "every founder has feelings about the others")
 
             for _ in 0..<150 {
                 Self.assets.engine.advance(&clan, using: &rng)

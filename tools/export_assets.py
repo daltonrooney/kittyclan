@@ -29,7 +29,15 @@ SHEETS = [
     "scars", "scars_missing_part", "patches_white_little", "patches_white_mid",
     "patches_white_high", "patches_white_mostly", "patches_points",
     "patches_vitiligo", "patches_tortie", "acc_plants", "acc_wilds",
+    "lineart_sc", "lineart_df", "lineart_ur", "line_sc_overlay", "line_ur_underlay",
+    "line_ur_overlay", "line_ur_gradient", "fademask", "fadestarclan", "fadedarkforest",
+    "fadeunknownresidence",
 ]
+SINGLE_SHEETS = [
+    "lineart", "heterochromiamask", "lineart_sc", "lineart_df", "lineart_ur",
+    "line_sc_overlay", "line_ur_underlay", "line_ur_overlay", "line_ur_gradient",
+]
+FADE_SHEETS = ["fademask", "fadestarclan", "fadedarkforest", "fadeunknownresidence"]
 DATA_FILES = {
     "eyes": "eye_sprite_data",
     "pelt_parts_masks": "pelt_parts_masks_data",
@@ -79,7 +87,12 @@ def main():
     for sheet in SHEETS:
         write_rgba(CLANGEN / "sprites" / f"{sheet}.png", OUT / f"{sheet}.rgba")
 
-    sheets = {"lineart": [["", 0, 0]], "heterochromiamask": [["", 0, 0]]}
+    faded = [png for png in sorted((CLANGEN / "sprites" / "faded").glob("faded_*.png")) if "aprilfools" not in png.name]
+    for png in faded:
+        write_rgba(png, OUT / f"{png.stem}.rgba")
+
+    sheets = {sheet: [["", 0, 0]] for sheet in SINGLE_SHEETS + [png.stem for png in faded]}
+    sheets.update({sheet: [[str(i), 0, i] for i in range(3)] for sheet in FADE_SHEETS})
     body_parts = {}
     for sheet, data_name in DATA_FILES.items():
         rows = entries(load(data_name)["sprite_list"])
@@ -133,6 +146,11 @@ def main():
             json.dump(data, f, indent=1)
     shutil.copy(CLANGEN / "resources" / "lang" / "en" / "names.json", OUT / "names.json")
     export_text()
+    export_camps()
+    afterlife = OUT.parent / "Afterlife"
+    afterlife.mkdir(exist_ok=True)
+    for name in ("starclanbg", "darkforestbg", "urbg"):
+        shutil.copy(CLANGEN / "resources" / "images" / f"{name}.png", afterlife / f"{name}.png")
 
     golden = OUT.parent.parent.parent / "KittyClanTests" / "Golden"
     for png in golden.glob("*.png"):
@@ -194,6 +212,11 @@ def export_text():
         files[f"patrols/forest/{folder}"] = sorted((patrols / "forest" / folder).glob("*.json"))
     files[""].append(lang / "relationships.en.json")
     files[""].append(lang / "cat" / "skills.en.json")
+    files["afterlife"] = [
+        events / "lead_ceremony_sc.json", events / "lead_ceremony_df.json",
+        lang / "cat" / "afterlife.en.json", lang / "cat" / "backstories.en.json",
+        lang / "cat" / "history.en.json",
+    ]
 
     with open(patrols / "prey_text_replacements.json", encoding="utf-8") as f:
         prey = json.load(f)
@@ -213,6 +236,21 @@ def export_text():
                 json.dump(data, f, ensure_ascii=False)
 
     export_patrol_art([path for folder, paths in files.items() if folder.startswith("patrols") for path in paths])
+
+
+def export_camps():
+    """Copy the forest camp backgrounds and Clangen's forest camp layouts."""
+    out = OUT.parent / "Camps"
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    for png in sorted((CLANGEN / "resources" / "images" / "camp_bg" / "forest").glob("*.png")):
+        shutil.copy(png, out / png.name)
+    with open(CLANGEN / "resources" / "placements.json", encoding="utf-8") as f:
+        placements = json.load(f)
+    layouts = {key: value for key, value in placements.items() if key.startswith("Forest") or key == "default"}
+    with open(out / "layouts.json", "w", encoding="utf-8") as f:
+        json.dump(layouts, f)
 
 
 def export_patrol_art(patrol_files):
