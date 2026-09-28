@@ -1,0 +1,14 @@
+import Foundation
+
+/// Clangen's `CatThought`: which pool a cat's next thought comes from.
+enum ThoughtKind: String, Codable, Sendable, CaseIterable {
+    case isGuide = "is_guide", whileDead = "while_dead", whileAlive = "while_alive"
+    case onDeath = "on_death", onBirth = "on_birth", onMeeting = "on_meeting", onJoin = "on_join"
+    case onExile = "on_exile", onLost = "on_lost", onRankChange = "on_rank_change"
+}
+
+/// The one-line thought on a cat's profile: Clangen text with `m_c` for the cat and `r_c` for `about`.
+struct Thought: Codable, Hashable, Sendable {
+    var text: String
+    var about: UUID?
+}

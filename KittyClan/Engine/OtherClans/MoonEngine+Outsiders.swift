@@ -9,6 +9,7 @@ extension MoonEngine {
         guard var cat = removeFromClan(id, in: &clan, using: &rng) else { return }
         cat.isLost = true
         cat.origin = pick([.kittypet, .loner], &rng)
+        cat.nextThought = .onLost
         clan.outsiders.append(cat)
     }
 
@@ -17,6 +18,7 @@ extension MoonEngine {
         guard var cat = removeFromClan(id, in: &clan, using: &rng) else { return }
         cat.isExiled = true
         cat.origin = .loner
+        cat.nextThought = .onExile
         clan.outsiders.append(cat)
     }
 
@@ -286,9 +288,11 @@ extension MoonEngine {
                     cat.skills.primary?.interestOnly = true
                     cat.skills.secondary?.interestOnly = true
                 }
+                if cat.isAlive { cat.nextThought = .onJoin }
                 clan.cats.append(cat)
                 if cat.rank.isApprentice { Self.assignMentor(to: cat.id, in: &clan, using: &rng) }
             } else {
+                if cat.isAlive { cat.nextThought = .onMeeting }
                 clan.outsiders.append(cat)
             }
             ids.append(cat.id)

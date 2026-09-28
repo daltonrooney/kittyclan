@@ -99,7 +99,7 @@ struct TextTemplate: Sendable {
         let capitalize = parts.last == "CAP"
         if capitalize { parts.removeLast() }
 
-        let word: String? = switch parts[0] {
+        let word: String? = switch parts[0].uppercased() {
         case "PRONOUN": set[parts[2]]
         case "VERB": parts.indices.contains(set.conju + 1) ? parts[set.conju + 1] : nil
         case "ADJ": parts.indices.contains(set.gender + 2) ? parts[set.gender + 2] : nil

@@ -31,7 +31,8 @@ struct GameAssets: Sendable {
             factory: factory, narrator: narrator, library: library, relationships: relationships,
             conditions: try ConditionLibrary(directory: text),
             herbLibrary: try HerbLibrary(directory: text),
-            ceremonies: try LeaderCeremonyLibrary(directory: text)
+            ceremonies: try LeaderCeremonyLibrary(directory: text),
+            thoughts: try ThoughtLibrary(directory: text)
         )
         let patrolLibrary = try PatrolLibrary(directory: text, artDirectory: Bundle.main.url(forResource: "PatrolArt", withExtension: nil))
         return GameAssets(
@@ -47,6 +48,14 @@ struct GameAssets: Sendable {
     }
 
     var names: NameGenerator { factory.names }
+
+    /// The cat's current thought, e.g. "Is watching over the kits".
+    func thought(of cat: Cat, in clan: Clan) -> String? {
+        guard let thought = cat.thought else { return nil }
+        var cats = ["m_c": cat]
+        if let other = clan[thought.about] { cats["r_c"] = other }
+        return afterlifeText.template.resolve(thought.text, cats: cats, clan: clan)
+    }
 
     func displayName(_ cat: Cat) -> String {
         names.display(cat.name, rank: cat.rank)

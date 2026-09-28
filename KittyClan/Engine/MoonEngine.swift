@@ -9,6 +9,7 @@ struct MoonEngine: Sendable {
     var conditions: ConditionLibrary?
     var herbLibrary: HerbLibrary?
     var ceremonies: LeaderCeremonyLibrary?
+    var thoughts: ThoughtLibrary?
 
     private static let canHaveKits: Set<Rank> = [.leader, .deputy, .medicineCat, .warrior, .elder]
     private static let litterWeights: [CatAge: [Int]] = [
@@ -25,6 +26,8 @@ struct MoonEngine: Sendable {
         clan.patrolledThisMoon = []
         for id in clan.pregnancies.keys { clan.pregnancies[id]?.moons += 1 }
         afterlifeMoon(in: &clan, using: &rng)
+        for i in clan.cats.indices { clan.cats[i].nextThought = nil }
+        for i in clan.outsiders.indices { clan.outsiders[i].nextThought = nil }
         if clan.otherClans.isEmpty { clan.otherClans = generateOtherClans(for: clan, using: &rng) }
         events += checkWar(in: &clan, using: &rng)
         let denTarget: UUID? = if case .outsider(let id)? = clan.outsiderDenPlan?.target { id } else { nil }
@@ -117,6 +120,7 @@ struct MoonEngine: Sendable {
             }
         }
         events += promoteDeputy(in: &clan, using: &rng)
+        generateThoughts(in: &clan, using: &rng)
 
         let entries = events.map { narrator.entry($0, in: clan, using: &rng) }
         for (event, entry) in zip(events, entries) {
@@ -224,6 +228,7 @@ struct MoonEngine: Sendable {
     func setRank(_ rank: Rank, for id: UUID, in clan: inout Clan, using rng: inout some RandomNumberGenerator) {
         guard let i = clan.index(of: id) else { return }
         clan.cats[i].rank = rank
+        if !rank.isBaby { clan.cats[i].nextThought = .onRankChange }
         factory.traits.setKit(rank.isBaby, &clan.cats[i].personality, using: &rng)
         if !rank.isApprentice { Self.removeMentor(from: id, in: &clan) }
         for apprentice in clan.cats[i].apprentices where !Self.canMentor(clan[id], clan[apprentice]) {
@@ -331,6 +336,8 @@ struct MoonEngine: Sendable {
             clan.cats += kits
             relationships?.initializeKits(kits.map(\.id), parents: [id, father.id], in: &clan, using: &rng)
             for kit in kits { rollCongenital(for: kit.id, in: &clan, using: &rng) }
+            clan.cats[i].nextThought = .onBirth
+            if let f = clan.index(of: father.id), clan.cats[f].isAlive { clan.cats[f].nextThought = .onBirth }
             var events: [MoonEvent] = [.born(mother: id, father: father.id, kits: kits.map(\.id))]
             if oneIn(40, &rng) { events += loseLifeOrDie(id, cause: .childbirth, in: &clan, using: &rng) }
             return events
@@ -467,6 +474,7 @@ struct MoonEngine: Sendable {
     ) -> [MoonEvent] {
         guard let i = clan.index(of: id) else { return [] }
         clan.cats[i].conditions.removeAll { $0.kind != .permanent }
+        clan.cats[i].nextThought = .onDeath
         let history = history ?? Self.defaultHistory[cause]
         if clan.leader == id {
             clan.leaderLives -= 1

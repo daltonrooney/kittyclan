@@ -51,12 +51,13 @@ struct Constraint: Sendable {
         }
     }
 
-    func matches(_ cat: Cat, allowNewborn: Bool = true) -> Bool {
+    /// - Parameter status: the status to match instead of the rank, e.g. an outsider's "loner".
+    func matches(_ cat: Cat, status: String? = nil, allowNewborn: Bool = true) -> Bool {
         if !allowNewborn, cat.rank == .newborn, ages?.contains("newborn") != true { return false }
         return cat.skills.satisfies(skills ?? [])
             && statHolds(for: cat)
             && Self.listAllows(ages, cat.age.rawValue)
-            && Self.listAllows(statuses, cat.rank.rawValue)
+            && Self.listAllows(statuses, status ?? cat.rank.rawValue)
             && Self.listAllows(traits, cat.personality.trait)
             && Self.listAllows(genders, cat.sex.rawValue)
             && hasMentor.map { $0 == (cat.mentor != nil) } ?? true

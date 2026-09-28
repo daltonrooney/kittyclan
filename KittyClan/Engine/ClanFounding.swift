@@ -76,6 +76,7 @@ struct ClanFounding: Sendable {
         }
         engine.makeGuide(for: &clan, using: &rng)
         engine.crownLeader(leader.id, in: &clan, using: &rng)
+        engine.generateThoughts(in: &clan, using: &rng)
         clan.history = [MoonLog(moon: 0, entries: [engine.narrator.entry(.founded, in: clan, using: &rng)])]
         return clan
     }
