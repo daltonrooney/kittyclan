@@ -8,6 +8,12 @@ struct StoryPick: Sendable {
     var cats: [String: UUID]
     var deaths: [UUID] = []
     var livesLost = LivesLost.one
+    var relationshipChanges: [RelationshipChange] = []
+    /// Abbreviations that stand for several cats, e.g. `multi_cat`.
+    var groupCats: [String: [UUID]] = [:]
+
+    /// Every abbreviation with the cats it stands for.
+    var allCats: [String: [UUID]] { cats.mapValues { [$0] }.merging(groupCats) { a, _ in a } }
 }
 
 /// Clangen's ceremony, death and misc event text, filtered to the features KittyClan simulates.
@@ -163,13 +169,13 @@ private struct Ceremony: Sendable {
         for (abbr, constraint) in others {
             let options = clan.living.filter { !cats.values.contains($0.id) && constraint.matches($0) }.shuffled(using: &rng)
             guard let chosen = options.first(where: { candidate in
-                var trial = cats
-                trial[abbr] = candidate.id
+                var trial = cats.mapValues { [$0] }
+                trial[abbr] = [candidate.id]
                 return relationships.allSatisfy { $0.holds(trial, clan, partial: true) }
             }) else { return nil }
             cats[abbr] = chosen.id
         }
-        return relationships.allSatisfy { $0.holds(cats, clan, partial: false) } ? cats : nil
+        return relationships.allSatisfy { $0.holds(cats.mapValues { [$0] }, clan, partial: false) } ? cats : nil
     }
 }
 
@@ -183,7 +189,7 @@ private struct ShortEvent: Sendable {
     let mainDies: Bool
     let random: Constraint?
     let randomDies: Bool
-    let randomRelationship: [String]
+    let relationshipChanges: [RelationshipChange]
     let weight: Int
 
     private static let keys: Set<String> = [
@@ -215,9 +221,9 @@ private struct ShortEvent: Sendable {
             guard let c = Constraint(randomJSON) else { return nil }
             random = c
         }
-        // Clangen reads `relationship_status` as m_c → r_c, wherever it is written.
-        let relationship = (mainJSON["relationship_status"] as? [String] ?? []) + (randomJSON?["relationship_status"] as? [String] ?? [])
-        guard relationship.allSatisfy(RelationshipRule.isSupported), relationship.isEmpty || random != nil else { return nil }
+        if !main.relationshipStatus.isEmpty, random == nil { return nil }
+        let changes = (json["relationships"] as? [[String: Any]] ?? []).compactMap(RelationshipChange.init)
+        guard changes.count == (json["relationships"] as? [Any])?.count ?? 0 else { return nil }
 
         subType = subTypes.first ?? ""
         frequency = json["frequency"] as? Int ?? 4
@@ -228,7 +234,7 @@ private struct ShortEvent: Sendable {
         mainDies = mainJSON["dies"] as? Bool ?? false
         self.random = random
         randomDies = randomJSON?["dies"] as? Bool ?? false
-        randomRelationship = relationship
+        relationshipChanges = changes
 
         var weight = 1
         if location != ["any"] { weight += 1 }
@@ -248,7 +254,8 @@ private struct ShortEvent: Sendable {
         if let random {
             let options = clan.living.filter { other in
                 other.id != cat.id && random.matches(other, allowNewborn: false)
-                    && randomRelationship.allSatisfy { RelationshipRule.relationship($0, from: cat, to: other) }
+                    && main.relationshipHolds(from: cat, to: other, in: clan)
+                    && random.relationshipHolds(from: other, to: cat, in: clan)
             }
             guard let other = options.randomElement(using: &rng) else { return nil }
             cats["r_c"] = other.id
@@ -258,181 +265,6 @@ private struct ShortEvent: Sendable {
             return nil
         }
         let lives: StoryPick.LivesLost = tags.contains("all_lives") ? .all : tags.contains("some_lives") ? .some : .one
-        return StoryPick(template: text, cats: cats, deaths: deaths, livesLost: lives)
-    }
-}
-
-/// An `involved_cats`, `m_c` or `r_c` constraint block, limited to keys KittyClan can evaluate.
-private struct Constraint: Sendable {
-    var ages: [String]?
-    var statuses: [String]?
-    var traits: [String]?
-    var genders: [String]?
-    var skillsPass = true
-    var hasMentor: Bool?
-    var hasCurrentApprentice: Bool?
-    var hasFormerApprentice: Bool?
-
-    init?(_ json: [String: Any]) {
-        for (key, value) in json {
-            switch key {
-            case "age": ages = value as? [String]
-            case "status":
-                let list = value as? [String] ?? []
-                if !list.contains("clancat"), !list.contains("any") { statuses = list }
-            case "trait": traits = value as? [String]
-            case "gender": genders = value as? [String]
-            case "skill":
-                // KittyClan cats have no skills yet, so only exclusions ("-FIGHTER,2") can pass.
-                skillsPass = (value as? [String] ?? []).allSatisfy { $0.hasPrefix("-") }
-            case "group":
-                guard (value as? [String])?.allSatisfy({ $0 == "player_clan" }) == true else { return nil }
-            case "has_mentor": hasMentor = value as? Bool
-            case "has_apprentice":
-                guard let spec = value as? [String: Any], Set(spec.keys).isSubset(of: ["current", "former"]) else { return nil }
-                hasCurrentApprentice = spec["current"] as? Bool
-                hasFormerApprentice = spec["former"] as? Bool
-            case "stat":
-                guard let spec = value as? [String: Any], Set(spec.keys) == ["trait"] else { return nil }
-                traits = spec["trait"] as? [String]
-            case "dies", "relationship_status":
-                continue
-            default:
-                return nil
-            }
-        }
-    }
-
-    func matches(_ cat: Cat, allowNewborn: Bool = true) -> Bool {
-        if !allowNewborn, cat.rank == .newborn, ages?.contains("newborn") != true { return false }
-        return skillsPass
-            && Self.listAllows(ages, cat.age.rawValue)
-            && Self.listAllows(statuses, cat.rank.rawValue)
-            && Self.listAllows(traits, cat.personality.trait)
-            && Self.listAllows(genders, cat.sex.rawValue)
-            && hasMentor.map { $0 == (cat.mentor != nil) } ?? true
-            && hasCurrentApprentice.map { $0 == !cat.apprentices.isEmpty } ?? true
-            && hasFormerApprentice.map { $0 == !cat.formerApprentices.isEmpty } ?? true
-    }
-
-    /// A Clangen filter list: "any", a match, or an exclusion list when any entry starts with "-".
-    static func listAllows(_ list: [String]?, _ value: String, normalize: (String) -> String = { $0 }) -> Bool {
-        guard let list, !list.isEmpty, !list.contains("any") else { return true }
-        if list.contains(where: { $0.hasPrefix("-") }) {
-            return !list.map { normalize(String($0.drop { $0 == "-" })) }.contains(value)
-        }
-        return list.map(normalize).contains(value)
-    }
-
-    private static let flagTags: Set<String> = [
-        "classic", "no_body", "all_lives", "some_lives", "lives_remain", "high_lives", "mid_lives", "low_lives",
-    ]
-    private static let blockedTokens = [
-        "o_c_n", "POI", "mur_c", "acc_", "_list", "multi_cat", "given_herb", "n_c", "r_c0", "r_c1", "r_c2", "r_c3",
-        "p_l", "s_c", "cat_tag", "past_deputy", "mc_mate", "rc_mate", "%{",
-    ]
-    nonisolated(unsafe) private static let preyToken = try! Regex(#"[bdfmpw]_(tp|mp|bp)"#)
-
-    static func isSupportedTag(_ tag: String) -> Bool {
-        tag.hasPrefix("clan:") || tag.hasPrefix("-clan:") || flagTags.contains(tag)
-    }
-
-    static func textIsSupported(_ text: String, allowing abbreviations: Set<String>) -> Bool {
-        for token in blockedTokens where text.contains(token) && !abbreviations.contains(token) {
-            return false
-        }
-        return !text.contains(preyToken)
-    }
-
-    /// Text naming the leader, deputy or medicine cat needs that cat to exist.
-    static func namedRolesExist(in text: String, clan: Clan) -> Bool {
-        if text.contains("lead_name"), !clan.isAlive(clan.leader) { return false }
-        if text.contains("dep_name"), !clan.isAlive(clan.deputy) { return false }
-        if text.contains("med_name"), !clan.living.contains(where: { $0.rank == .medicineCat }) { return false }
-        return true
-    }
-
-    /// Clangen's `clan:<rank>[(min:N)]` tags and leader-lives tags.
-    static func tagsAllow(_ tags: [String], in clan: Clan, cat: Cat) -> Bool {
-        let isLeader = cat.id == clan.leader
-        let lives = clan.leaderLives
-        for tag in tags {
-            if tag.hasPrefix("clan:") || tag.hasPrefix("-clan:") {
-                let negated = tag.hasPrefix("-")
-                var body = String(tag.drop { $0 == "-" }.dropFirst("clan:".count))
-                var minimum: Int?
-                if let open = body.firstIndex(of: "("), let colon = body.firstIndex(of: ":"), let close = body.firstIndex(of: ")") {
-                    minimum = Int(body[body.index(after: colon)..<close])
-                    body = String(body[..<open])
-                }
-                let count: Int
-                switch body {
-                case "apps": count = clan.living.filter { $0.rank.isApprentice }.count
-                case "warrior-like": count = clan.living.filter { [.warrior, .deputy, .leader].contains($0.rank) }.count
-                default:
-                    guard let rank = Rank(rawValue: body) else { return false }
-                    count = clan.living.filter { $0.rank == rank }.count
-                }
-                let needed = minimum ?? (["leader", "deputy"].contains(body) ? 1 : 2)
-                if (count >= needed) == negated { return false }
-                continue
-            }
-            switch tag {
-            case "some_lives": if isLeader, !(4...9).contains(lives) { return false }
-            case "lives_remain": if !isLeader || !(2...9).contains(lives) { return false }
-            case "high_lives": if !isLeader || !(7...9).contains(lives) { return false }
-            case "mid_lives": if !isLeader || !(4...6).contains(lives) { return false }
-            case "low_lives": if !isLeader || !(1...3).contains(lives) { return false }
-            default: break
-            }
-        }
-        return true
-    }
-}
-
-/// A ceremony `relationship_constraint` between involved cats.
-private struct RelationshipRule: Sendable {
-    let from: [String]
-    let to: [String]
-    let constraints: [String]
-
-    init?(_ json: [String: Any]) {
-        from = json["cats_from"] as? [String] ?? []
-        to = json["cats_to"] as? [String] ?? []
-        constraints = json["constraints"] as? [String] ?? []
-        guard constraints.allSatisfy(Self.isSupported) else { return nil }
-    }
-
-    static func isSupported(_ name: String) -> Bool {
-        ["mates", "app/mentor", "mentor/app", "past_app/mentor", "past_mentor/app", "child/parent", "parent/child", "siblings", "littermates"]
-            .contains(name)
-    }
-
-    static func relationship(_ name: String, from a: Cat, to b: Cat) -> Bool {
-        switch name {
-        case "mates": a.mates.contains(b.id)
-        case "app/mentor": a.mentor == b.id
-        case "mentor/app": b.mentor == a.id
-        case "past_app/mentor": a.formerMentors.contains(b.id)
-        case "past_mentor/app": b.formerMentors.contains(a.id)
-        case "child/parent": a.parents.contains(b.id)
-        case "parent/child": b.parents.contains(a.id)
-        case "siblings": !Set(a.parents).isDisjoint(with: b.parents)
-        case "littermates": !Set(a.parents).isDisjoint(with: b.parents) && a.moons == b.moons
-        default: false
-        }
-    }
-
-    func holds(_ cats: [String: UUID], _ clan: Clan, partial: Bool) -> Bool {
-        for f in from {
-            for t in to {
-                guard let a = cats[f].flatMap({ clan[$0] }), let b = cats[t].flatMap({ clan[$0] }) else {
-                    if partial { continue }
-                    return false
-                }
-                if !constraints.allSatisfy({ Self.relationship($0, from: a, to: b) }) { return false }
-            }
-        }
-        return true
+        return StoryPick(template: text, cats: cats, deaths: deaths, livesLost: lives, relationshipChanges: relationshipChanges)
     }
 }

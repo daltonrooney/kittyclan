@@ -26,7 +26,7 @@ final class MoonEngineTests: XCTestCase {
         let others = candidates.filter { cat in !adults.prefix(3).contains { $0.id == cat.id } }
         let clan = founding.found(
             prefix: "Test", leader: adults[0], deputy: adults[1], medicineCat: adults[2],
-            members: Array(others.prefix(6)), narrator: Self.assets.engine.narrator, using: &rng
+            members: Array(others.prefix(6)), engine: Self.assets.engine, using: &rng
         )
         return (clan, rng)
     }
@@ -81,7 +81,7 @@ final class MoonEngineTests: XCTestCase {
                 for entry in log.entries {
                     XCTAssertFalse(entry.text.isEmpty)
                     XCTAssertFalse(entry.text.contains("{"), "unresolved template: \(entry.text)")
-                    XCTAssertFalse(entry.text.contains("m_c") || entry.text.contains("r_c"), "unresolved name: \(entry.text)")
+                    XCTAssertFalse(entry.text.contains("m_c") || entry.text.contains("r_c") || entry.text.contains("multi_cat") || entry.text.contains("cat_to"), "unresolved name: \(entry.text)")
                 }
             }
             totals.births += clan.cats.filter { $0.origin == .clanborn }.count

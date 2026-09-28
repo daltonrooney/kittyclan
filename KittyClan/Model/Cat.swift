@@ -51,6 +51,7 @@ struct Cat: Identifiable, Codable, Hashable, Sendable {
     var formerMentors: [UUID] = []
     var parents: [UUID] = []
     var mates: [UUID] = []
+    var previousMates: [UUID] = []
     var birthCooldown = 0
 
     var isDead = false

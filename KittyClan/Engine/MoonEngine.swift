@@ -5,6 +5,7 @@ struct MoonEngine: Sendable {
     let factory: CatFactory
     let narrator: any Narrator
     var library: EventLibrary?
+    var relationships: RelationshipEngine?
 
     private static let canHaveKits: Set<Rank> = [.leader, .deputy, .medicineCat, .warrior, .elder]
     private static let litterWeights: [CatAge: [Int]] = [
@@ -20,6 +21,7 @@ struct MoonEngine: Sendable {
         for id in clan.pregnancies.keys { clan.pregnancies[id]?.moons += 1 }
 
         var someoneJoined = false
+        var interactions: [UUID: Int] = [:]
         for id in clan.living.map(\.id) {
             guard let i = clan.index(of: id), clan.cats[i].isAlive else { continue }
 
@@ -37,12 +39,18 @@ struct MoonEngine: Sendable {
             events += ceremonies(for: id, in: &clan, using: &rng)
             events += pregnancy(for: id, in: &clan, using: &rng)
             guard clan.isAlive(id) else { continue }
-            events += findMate(for: id, in: &clan, using: &rng)
+            if let relationships {
+                events += relationships.moon(for: id, in: &clan, counts: &interactions, using: &rng)
+            }
             if !someoneJoined, let joined = invite(by: id, in: &clan, using: &rng) {
                 events += joined
                 someoneJoined = true
+                for newcomer in joined.flatMap(\.newcomers) {
+                    events += relationships?.welcome(newcomer, in: &clan, counts: &interactions, using: &rng) ?? []
+                }
             }
             if oneIn(30, &rng), let cat = clan[id], let pick = library?.miscEvent(for: cat, in: clan, using: &rng) {
+                relationships?.apply(pick.relationshipChanges, cats: pick.allCats, in: &clan, using: &rng)
                 events.append(.story(pick, .info))
             }
             events += deathRolls(for: id, in: &clan, using: &rng)
@@ -56,6 +64,11 @@ struct MoonEngine: Sendable {
         events += promoteDeputy(in: &clan, using: &rng)
 
         let entries = events.map { narrator.entry($0, in: clan, using: &rng) }
+        for (event, entry) in zip(events, entries) {
+            if case .story(let pick, .interaction) = event, let a = pick.cats["m_c"], let b = pick.cats["r_c"] {
+                clan.updateRelationship(from: a, to: b) { $0.addLog(entry.text) }
+            }
+        }
         clan.history.append(MoonLog(moon: clan.age, entries: entries))
     }
 
@@ -211,26 +224,6 @@ struct MoonEngine: Sendable {
         return Self.canHaveKits.contains(cat.rank) && clan.pregnancies[cat.id] == nil
     }
 
-    private func areRelated(_ a: Cat, _ b: Cat) -> Bool {
-        a.parents.contains(b.id) || b.parents.contains(a.id) || !Set(a.parents).isDisjoint(with: b.parents)
-    }
-
-    /// A simplified stand-in for Clangen's relationship system: unmated adults occasionally pair up.
-    private func findMate(for id: UUID, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [MoonEvent] {
-        guard let cat = clan[id], cat.mates.isEmpty, cat.isMateAge, cat.moons >= 14, oneIn(20, &rng) else { return [] }
-        let options = clan.living.filter { other in
-            other.id != id && other.mates.isEmpty && other.isMateAge && other.moons >= 14
-                && abs(other.moons - cat.moons) <= 40 && !areRelated(cat, other)
-                && cat.mentor != other.id && other.mentor != cat.id
-        }
-        guard let mate = options.randomElement(using: &rng),
-              let a = clan.index(of: id), let b = clan.index(of: mate.id)
-        else { return [] }
-        clan.cats[a].mates.append(mate.id)
-        clan.cats[b].mates.append(id)
-        return [.becameMates(id, mate.id)]
-    }
-
     private func pregnancy(for id: UUID, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [MoonEvent] {
         guard let i = clan.index(of: id) else { return [] }
 
@@ -258,6 +251,7 @@ struct MoonEngine: Sendable {
                 kits.append(kit)
             }
             clan.cats += kits
+            relationships?.initializeKits(kits.map(\.id), parents: [id, father.id], in: &clan, using: &rng)
             var events: [MoonEvent] = [.born(mother: id, father: father.id, kits: kits.map(\.id))]
             if oneIn(40, &rng) { events += loseLifeOrDie(id, cause: .childbirth, in: &clan, using: &rng) }
             return events
@@ -332,6 +326,7 @@ struct MoonEngine: Sendable {
               pick.deaths.contains(id)
         else { return loseLifeOrDie(id, cause: cause, in: &clan, using: &rng) }
 
+        relationships?.apply(pick.relationshipChanges, cats: pick.allCats, in: &clan, using: &rng)
         var events: [MoonEvent] = [.story(pick, .death)]
         for victim in pick.deaths {
             let lives: Int = if victim != clan.leader {

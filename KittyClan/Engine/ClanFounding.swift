@@ -42,7 +42,7 @@ struct ClanFounding: Sendable {
         deputy: Cat,
         medicineCat: Cat,
         members: [Cat],
-        narrator: Narrator,
+        engine: MoonEngine,
         using rng: inout some RandomNumberGenerator
     ) -> Clan {
         var leader = leader
@@ -61,7 +61,8 @@ struct ClanFounding: Sendable {
         for cat in clan.living where cat.rank.isApprentice {
             MoonEngine.assignMentor(to: cat.id, in: &clan, using: &rng)
         }
-        clan.history = [MoonLog(moon: 0, entries: [narrator.entry(.founded, in: clan, using: &rng)])]
+        engine.relationships?.initializeFounders(&clan, using: &rng)
+        clan.history = [MoonLog(moon: 0, entries: [engine.narrator.entry(.founded, in: clan, using: &rng)])]
         return clan
     }
 }

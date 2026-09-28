@@ -9,6 +9,7 @@ extension LogEntry.Kind {
         case .join: "pawprint.fill"
         case .relationship: "heart.fill"
         case .info: "info.circle.fill"
+        case .interaction: "bubble.left.and.bubble.right.fill"
         }
     }
 
@@ -20,6 +21,7 @@ extension LogEntry.Kind {
         case .join: .teal
         case .relationship: .red
         case .info: .blue
+        case .interaction: .orange
         }
     }
 
@@ -31,6 +33,7 @@ extension LogEntry.Kind {
         case .join: "New arrival"
         case .relationship: "Relationship"
         case .info: "News"
+        case .interaction: "Interaction"
         }
     }
 }

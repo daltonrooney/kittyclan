@@ -43,6 +43,10 @@ struct ClangenNarrator: Narrator {
 
     private func resolve(_ pick: StoryPick, in clan: Clan, extras: [String: String] = [:]) -> String {
         let cats = pick.cats.compactMapValues { clan[$0] }
+        var extras = extras
+        for (abbr, ids) in pick.groupCats {
+            extras[abbr] = template.list(ids.compactMap { clan[$0] })
+        }
         return template.resolve(pick.template, cats: cats, clan: clan, extras: extras)
     }
 }

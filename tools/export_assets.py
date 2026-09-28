@@ -157,6 +157,14 @@ def export_text():
             CLANGEN / "resources" / "dicts" / "traits" / "trait_ranges.json",
         ],
     }
+    rel = lang / "events" / "relationship_events"
+    for kind in ("normal_interactions", "group_interactions", "joining_interactions"):
+        for path in sorted((rel / kind).rglob("*.json")):
+            folder = str(path.parent.relative_to(lang / "events"))
+            files.setdefault(folder, []).append(path)
+    files["relationship_events"] = [rel / "become_mates.json", rel / "become_mates_poly.json", rel / "breakup_mates.json"]
+    files[""].append(lang / "relationships.en.json")
+
     for folder, paths in files.items():
         (text / folder).mkdir(parents=True, exist_ok=True)
         for path in paths:

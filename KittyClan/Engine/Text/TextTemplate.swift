@@ -62,6 +62,17 @@ struct TextTemplate: Sendable {
         return replaceClanName(output, clan.displayName)
     }
 
+    /// Clangen's `adjust_list_text`: "A", "A and B", or "A, B, and C".
+    func list(_ cats: [Cat]) -> String {
+        let labels = cats.map { names.display($0.name, rank: $0.rank) }
+        switch labels.count {
+        case 0: return ""
+        case 1: return labels[0]
+        case 2: return "\(labels[0]) and \(labels[1])"
+        default: return labels.dropLast().joined(separator: ", ") + ", and " + labels.last!
+        }
+    }
+
     /// Resolves `{PRONOUN/abbr/field}`, `{VERB/abbr/plural/singular}` and `{ADJ/abbr/they/he/she}`,
     /// with an optional trailing `/CAP`. Tags for cats not in this event are left for later.
     private func resolveTags(_ text: String, cats: [String: Cat]) -> String {

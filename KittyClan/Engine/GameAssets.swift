@@ -20,16 +20,14 @@ struct GameAssets: Sendable {
             traits: try TraitTable(url: text.appending(path: "trait_ranges.json"))
         )
         let library = try EventLibrary(directory: text)
-        let narrator = ClangenNarrator(
-            library: library,
-            template: TextTemplate(pronouns: try PronounTable(url: text.appending(path: "pronouns.en.json")), names: names),
-            fallback: BasicNarrator(names: names)
-        )
+        let template = TextTemplate(pronouns: try PronounTable(url: text.appending(path: "pronouns.en.json")), names: names)
+        let narrator = ClangenNarrator(library: library, template: template, fallback: BasicNarrator(names: names))
+        let relationships = RelationshipEngine(library: try InteractionLibrary(directory: text), template: template)
         return GameAssets(
             renderer: renderer,
             factory: factory,
             founding: ClanFounding(factory: factory),
-            engine: MoonEngine(factory: factory, narrator: narrator, library: library)
+            engine: MoonEngine(factory: factory, narrator: narrator, library: library, relationships: relationships)
         )
     }
 

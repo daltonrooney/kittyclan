@@ -53,6 +53,17 @@ enum MoonEvent: Sendable {
     }
 }
 
+extension MoonEvent {
+    /// Cats who just arrived in the Clan.
+    var newcomers: [UUID] {
+        switch self {
+        case .joined(let cat, _): [cat]
+        case .litterFound(let kits, _): kits
+        default: []
+        }
+    }
+}
+
 /// Turns moon events into log text.
 protocol Narrator: Sendable {
     func text(for event: MoonEvent, in clan: Clan, using rng: inout some RandomNumberGenerator) -> String

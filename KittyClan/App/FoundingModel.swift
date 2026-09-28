@@ -98,7 +98,7 @@ final class FoundingModel {
             deputy: deputy,
             medicineCat: medicineCat,
             members: selection.members.compactMap(cat),
-            narrator: assets.engine.narrator,
+            engine: assets.engine,
             using: &rng
         )
     }
