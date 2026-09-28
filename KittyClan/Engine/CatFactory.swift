@@ -61,6 +61,7 @@ struct CatFactory: Sendable {
             moons: moons,
             appearance: looks,
             personality: traits.random(kit: baby, using: &rng),
+            skills: Self.skills(rank: rank, age: age, using: &rng),
             rank: rank,
             origin: origin,
             experience: Self.startingExperience(moons: moons, using: &rng)

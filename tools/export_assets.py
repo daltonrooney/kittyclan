@@ -179,6 +179,7 @@ def export_text():
     for folder in ("hunting", "border", "training", "med"):
         files[f"patrols/forest/{folder}"] = sorted((patrols / "forest" / folder).glob("*.json"))
     files[""].append(lang / "relationships.en.json")
+    files[""].append(lang / "cat" / "skills.en.json")
 
     with open(patrols / "prey_text_replacements.json", encoding="utf-8") as f:
         prey = json.load(f)

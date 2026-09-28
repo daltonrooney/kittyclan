@@ -46,6 +46,7 @@ struct MoonEngine: Sendable {
 
             gainApprenticeExperience(i, in: &clan, using: &rng)
             events += ceremonies(for: id, in: &clan, using: &rng)
+            progressSkills(id, in: &clan, using: &rng)
             if clan[id]?.isDisabled == true {
                 events += progressDisabilities(for: id, skip: &skip, in: &clan, using: &rng)
                 guard clan.isAlive(id) else { continue }
@@ -135,7 +136,7 @@ struct MoonEngine: Sendable {
         }
 
         if cat.rank == .kitten, cat.moons == CatAge.adolescent.moons.lowerBound {
-            let rank: Rank = becomesMedicineApprentice(in: clan, using: &rng) ? .medicineApprentice : .apprentice
+            let rank: Rank = becomesMedicineApprentice(cat, in: clan, using: &rng) ? .medicineApprentice : .apprentice
             setRank(rank, for: id, in: &clan, using: &rng)
             return [.apprenticed(id, mentor: clan[id]?.mentor, oldName: oldName)]
         }
@@ -143,6 +144,7 @@ struct MoonEngine: Sendable {
         if cat.rank.isApprentice {
             let maxAge = cat.rank == .medicineApprentice ? 30 : 25
             if (cat.experience > 50 && cat.moons >= 10) || cat.moons >= maxAge {
+                graduationInfluence(on: id, from: cat.mentor, in: &clan, using: &rng)
                 setRank(cat.rank == .medicineApprentice ? .medicineCat : .warrior, for: id, in: &clan, using: &rng)
                 return [.graduated(id, oldName: oldName)]
             }
@@ -151,7 +153,7 @@ struct MoonEngine: Sendable {
     }
 
     /// Clangen's `_is_suitable_medcat_app`, without personality and skill modifiers.
-    private func becomesMedicineApprentice(in clan: Clan, using rng: inout some RandomNumberGenerator) -> Bool {
+    private func becomesMedicineApprentice(_ cat: Cat, in clan: Clan, using rng: inout some RandomNumberGenerator) -> Bool {
         let healers = clan.living.filter { $0.rank == .medicineCat }
         let apprentices = clan.living.filter { $0.rank == .medicineApprentice }
         var chance = 41.0
@@ -164,6 +166,10 @@ struct MoonEngine: Sendable {
         }
         if apprentices.isEmpty { chance /= 1.8 }
         if apprentices.count > 1 { chance *= 1 + 0.2 * Double(apprentices.count - 1) }
+        let drawn: Set<SkillPath> = [.OMEN, .PROPHET, .HEALER, .STAR, .DREAM, .CLAIRVOYANT, .GHOST, .CAMP]
+        if let path = cat.skills.primary?.path, drawn.contains(path) { chance /= 2 }
+        if let path = cat.skills.secondary?.path, drawn.contains(path) { chance /= 4 }
+        if cat.isDisabled { chance /= 2 }
         return oneIn(max(1, Int(chance)), &rng)
     }
 

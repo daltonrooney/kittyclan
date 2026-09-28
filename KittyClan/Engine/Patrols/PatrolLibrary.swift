@@ -13,6 +13,7 @@ struct PatrolSlot: Sendable {
     let constraint: Constraint
     /// Which already-involved cats a stat cat may be drawn from, e.g. `["any"]` or `["-p_l"]`.
     let prior: [String]?
+    let statSkills: [String]?
     let traits: [String]?
     let working: Bool?
     let experienceLevels: [String]?
@@ -26,10 +27,14 @@ struct PatrolSlot: Sendable {
         let ages: [String]
         let genders: [String]
         let status: String?
+        let skills: [String]
     }
 
-    /// Whether this slot adds Clangen's +10 stat bonus to the success chance.
-    var isStatCat: Bool { traits != nil }
+    /// Clangen's stat-cat bonus: 5 per tier of the matching skill, or 10 for a matching trait.
+    func successBonus(for cat: Cat) -> Int {
+        if let statSkills { return 5 * cat.skills.requirementTier(statSkills) }
+        return traits == nil ? 0 : 10
+    }
 
     private static let outsiderRanks: Set<String> = ["loner", "rogue", "kittypet"]
 
@@ -38,16 +43,9 @@ struct PatrolSlot: Sendable {
         var rest = json
         prior = rest.removeValue(forKey: "prior_abbreviation") as? [String]
 
-        if let stat = rest.removeValue(forKey: "stat") as? [String: Any] {
-            if stat["must_have_both"] as? Bool == true { return nil }
-            let skills = stat["skill"] as? [String] ?? []
-            let traits = stat["trait"] as? [String]
-            // Cats have no skills yet: a skill-only requirement can never be met.
-            if traits == nil, !skills.isEmpty, !skills.allSatisfy({ $0.hasPrefix("-") }) { return nil }
-            self.traits = traits
-        } else {
-            traits = nil
-        }
+        let stat = rest["stat"] as? [String: Any]
+        statSkills = stat?["skill"] as? [String]
+        traits = stat?["trait"] as? [String]
 
         if let health = rest.removeValue(forKey: "health") as? [String: Any] {
             guard Set(health.keys).isSubset(of: ["working", "condition"]) else { return nil }
@@ -70,7 +68,8 @@ struct PatrolSlot: Sendable {
                 litter: spec["become_litter"] as? Bool ?? false,
                 ages: rest["age"] as? [String] ?? [],
                 genders: rest["gender"] as? [String] ?? [],
-                status: outsiderStatuses.randomElement() ?? statuses.first
+                status: outsiderStatuses.randomElement() ?? statuses.first,
+                skills: (stat?["skill"] as? [String] ?? []).filter { !$0.hasPrefix("-") }
             )
         } else {
             create = nil
@@ -83,7 +82,6 @@ struct PatrolSlot: Sendable {
         if !outsiderStatuses.isEmpty {
             guard isOutsider, outsiderStatuses.contains(cat.origin.rawValue) else { return false }
         }
-        if let traits, !Constraint.listAllows(traits, cat.personality.trait) { return false }
         if let working, working == cat.isNotWorking { return false }
         if let levels = experienceLevels, !levels.contains(Self.experienceLevel(cat.experience)) { return false }
         if let conditions {
@@ -114,6 +112,7 @@ struct PatrolSlot: Sendable {
         if let statuses = constraint.statuses { w += statuses.count }
         if let ages = constraint.ages { w += ages.count }
         if let traits { w += traits.count }
+        if let statSkills { w += statSkills.first?.hasPrefix("-") == true ? SkillPath.allCases.count - statSkills.count : statSkills.count }
         if constraint.hasMentor != nil { w += 10 }
         return w
     }

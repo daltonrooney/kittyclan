@@ -6,7 +6,11 @@ struct Constraint: Sendable {
     var statuses: [String]?
     var traits: [String]?
     var genders: [String]?
-    var skillsPass = true
+    var skills: [String]?
+    /// A `stat` block: the cat needs one of the skills or traits (or both, when required).
+    var statSkills: [String]?
+    var statTraits: [String]?
+    var statNeedsBoth = false
     var hasMentor: Bool?
     var hasCurrentApprentice: Bool?
     var hasFormerApprentice: Bool?
@@ -23,8 +27,7 @@ struct Constraint: Sendable {
             case "trait": traits = value as? [String]
             case "gender": genders = value as? [String]
             case "skill":
-                // KittyClan cats have no skills yet, so only exclusions ("-FIGHTER,2") can pass.
-                skillsPass = (value as? [String] ?? []).allSatisfy { $0.hasPrefix("-") }
+                skills = value as? [String]
             case "group":
                 guard (value as? [String])?.allSatisfy({ $0 == "player_clan" }) == true else { return nil }
             case "has_mentor": hasMentor = value as? Bool
@@ -33,8 +36,10 @@ struct Constraint: Sendable {
                 hasCurrentApprentice = spec["current"] as? Bool
                 hasFormerApprentice = spec["former"] as? Bool
             case "stat":
-                guard let spec = value as? [String: Any], Set(spec.keys) == ["trait"] else { return nil }
-                traits = spec["trait"] as? [String]
+                guard let spec = value as? [String: Any], Set(spec.keys).isSubset(of: ["skill", "trait", "must_have_both"]) else { return nil }
+                statSkills = spec["skill"] as? [String]
+                statTraits = spec["trait"] as? [String]
+                statNeedsBoth = spec["must_have_both"] as? Bool ?? false
             case "relationship_status":
                 relationshipStatus = value as? [String] ?? []
                 guard relationshipStatus.allSatisfy(RelationshipRule.isSupported) else { return nil }
@@ -48,7 +53,8 @@ struct Constraint: Sendable {
 
     func matches(_ cat: Cat, allowNewborn: Bool = true) -> Bool {
         if !allowNewborn, cat.rank == .newborn, ages?.contains("newborn") != true { return false }
-        return skillsPass
+        return cat.skills.satisfies(skills ?? [])
+            && statHolds(for: cat)
             && Self.listAllows(ages, cat.age.rawValue)
             && Self.listAllows(statuses, cat.rank.rawValue)
             && Self.listAllows(traits, cat.personality.trait)
@@ -56,6 +62,14 @@ struct Constraint: Sendable {
             && hasMentor.map { $0 == (cat.mentor != nil) } ?? true
             && hasCurrentApprentice.map { $0 == !cat.apprentices.isEmpty } ?? true
             && hasFormerApprentice.map { $0 == !cat.formerApprentices.isEmpty } ?? true
+    }
+
+    /// Clangen's `_check_cat_stat`.
+    func statHolds(for cat: Cat) -> Bool {
+        guard statSkills != nil || statTraits != nil else { return true }
+        let hasSkill = !(statSkills ?? []).isEmpty && cat.skills.satisfies(statSkills!)
+        let hasTrait = !(statTraits ?? []).isEmpty && Self.listAllows(statTraits, cat.personality.trait)
+        return statNeedsBoth ? hasSkill && hasTrait : hasSkill || hasTrait
     }
 
     /// Clangen's legacy `relationship_status` check from this cat towards another.

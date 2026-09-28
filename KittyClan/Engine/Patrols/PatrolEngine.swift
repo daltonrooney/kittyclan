@@ -273,6 +273,13 @@ struct PatrolEngine: Sendable {
                 var cat = engine.factory.makeJoiner(origin: origin, using: &rng)
                 cat.moons = Int.random(in: min(age.moons.lowerBound, 300)...min(age.moons.upperBound, 300), using: &rng)
                 if let sex = spec.genders.compactMap(Cat.Sex.init).randomElement(using: &rng) { cat.sex = sex }
+                if let (path, tier) = spec.skills.randomElement(using: &rng).flatMap(CatSkills.requirement) {
+                    let t = max(tier, 1)
+                    cat.skills.primary = Skill(
+                        path: path, points: Int.random(in: ((t - 1) * 10)...((t - 1) * 10 + 9), using: &rng),
+                        interestOnly: [.newborn, .kitten, .adolescent].contains(cat.age)
+                    )
+                }
                 made.append(cat)
             }
             clan.outsiders += made
@@ -331,8 +338,9 @@ struct PatrolEngine: Sendable {
         let totalExp = Double(cats.reduce(0) { $0 + $1.experience })
         var chance = session.patrol.chanceOfSuccess + Int((1 + 0.1 * n) * totalExp / (n * 2))
         chance = min(chance, 90)
-        for slot in success.outcome.slots where slot.isStatCat && success.cats[slot.abbr] != nil {
-            chance += 10
+        for slot in success.outcome.slots {
+            guard let id = success.cats[slot.abbr]?.first, let cat = clan[id] else { continue }
+            chance += slot.successBonus(for: cat)
         }
         if chance >= 120 { chance = 115 }
         return Int.random(in: 0..<120, using: &rng) < chance
@@ -378,7 +386,12 @@ struct PatrolEngine: Sendable {
                 }
                 clan.cats.append(cat)
                 joined.append(cat.id)
-                if cat.rank.isApprentice { MoonEngine.assignMentor(to: cat.id, in: &clan, using: &rng) }
+                if cat.rank.isApprentice {
+                    cat.skills.primary?.interestOnly = true
+                    cat.skills.secondary?.interestOnly = true
+                    clan.cats[clan.cats.count - 1] = cat
+                    MoonEngine.assignMentor(to: cat.id, in: &clan, using: &rng)
+                }
                 var counts: [UUID: Int] = [:]
                 _ = engine.relationships?.welcome(cat.id, in: &clan, counts: &counts, using: &rng)
             }
@@ -485,17 +498,9 @@ struct PatrolEngine: Sendable {
     /// Clangen's `mentor_influence`: an apprentice patrolling with their mentor grows a little more like them.
     private func mentorInfluence(_ patrol: [UUID], in clan: inout Clan, using rng: inout some RandomNumberGenerator) {
         for id in patrol {
-            guard let i = clan.index(of: id), let mentorID = clan.cats[i].mentor, patrol.contains(mentorID),
-                  let mentor = clan[mentorID]?.personality
-            else { continue }
-            var p = clan.cats[i].personality
-            let facets: [WritableKeyPath<Personality, Int>] = [\.lawfulness, \.sociability, \.aggression, \.stability]
-            let diffs = facets.map { (path: $0, diff: mentor[keyPath: $0] - p[keyPath: $0]) }.filter { $0.diff != 0 }
-            guard !diffs.isEmpty else { continue }
-            let choice = weighted(diffs.map { ($0, abs($0.diff)) }, &rng)
-            p[keyPath: choice.path] += (choice.diff > 0 ? 1 : -1) * Int.random(in: 1...2, using: &rng)
-            engine.factory.traits.setKit(p.isKit, &p, using: &rng)
-            clan.cats[i].personality = p
+            guard let mentorID = clan[id]?.mentor, patrol.contains(mentorID) else { continue }
+            engine.mentorPersonalityInfluence(on: id, from: mentorID, in: &clan, using: &rng)
+            engine.mentorSkillInfluence(on: id, from: mentorID, in: &clan, using: &rng)
         }
     }
 

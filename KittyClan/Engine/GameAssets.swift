@@ -8,6 +8,7 @@ struct GameAssets: Sendable {
     let founding: ClanFounding
     let engine: MoonEngine
     let patrols: PatrolEngine
+    let skillText: SkillText
 
     static func loadBundled() throws -> GameAssets {
         let renderer = try CatRenderer.bundled()
@@ -34,7 +35,8 @@ struct GameAssets: Sendable {
             factory: factory,
             founding: ClanFounding(factory: factory),
             engine: engine,
-            patrols: PatrolEngine(library: patrolLibrary, engine: engine, template: template)
+            patrols: PatrolEngine(library: patrolLibrary, engine: engine, template: template),
+            skillText: try SkillText(url: text.appending(path: "skills.en.json"))
         )
     }
 

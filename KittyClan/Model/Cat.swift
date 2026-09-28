@@ -41,6 +41,7 @@ struct Cat: Identifiable, Codable, Hashable, Sendable {
     var moons: Int
     var appearance: CatAppearance
     var personality: Personality
+    var skills = CatSkills()
     var rank: Rank
     var origin: Origin = .founder
     var experience = 0
