@@ -11,6 +11,7 @@ extension LogEntry.Kind {
         case .info: "info.circle.fill"
         case .interaction: "bubble.left.and.bubble.right.fill"
         case .health: "cross.case.fill"
+        case .patrol: "figure.walk"
         }
     }
 
@@ -24,6 +25,7 @@ extension LogEntry.Kind {
         case .info: .blue
         case .interaction: .orange
         case .health: .green
+        case .patrol: .brown
         }
     }
 
@@ -37,6 +39,7 @@ extension LogEntry.Kind {
         case .info: "News"
         case .interaction: "Interaction"
         case .health: "Health"
+        case .patrol: "Patrol"
         }
     }
 }

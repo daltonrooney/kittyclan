@@ -7,6 +7,7 @@ struct GameAssets: Sendable {
     let factory: CatFactory
     let founding: ClanFounding
     let engine: MoonEngine
+    let patrols: PatrolEngine
 
     static func loadBundled() throws -> GameAssets {
         let renderer = try CatRenderer.bundled()
@@ -23,14 +24,17 @@ struct GameAssets: Sendable {
         let template = TextTemplate(pronouns: try PronounTable(url: text.appending(path: "pronouns.en.json")), names: names)
         let narrator = ClangenNarrator(library: library, template: template, fallback: BasicNarrator(names: names))
         let relationships = RelationshipEngine(library: try InteractionLibrary(directory: text), template: template)
+        let engine = MoonEngine(
+            factory: factory, narrator: narrator, library: library, relationships: relationships,
+            conditions: try ConditionLibrary(directory: text)
+        )
+        let patrolLibrary = try PatrolLibrary(directory: text, artDirectory: Bundle.main.url(forResource: "PatrolArt", withExtension: nil))
         return GameAssets(
             renderer: renderer,
             factory: factory,
             founding: ClanFounding(factory: factory),
-            engine: MoonEngine(
-                factory: factory, narrator: narrator, library: library, relationships: relationships,
-                conditions: try ConditionLibrary(directory: text)
-            )
+            engine: engine,
+            patrols: PatrolEngine(library: patrolLibrary, engine: engine, template: template)
         )
     }
 

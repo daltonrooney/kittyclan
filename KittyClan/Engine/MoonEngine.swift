@@ -19,6 +19,7 @@ struct MoonEngine: Sendable {
     func advance(_ clan: inout Clan, using rng: inout some RandomNumberGenerator) {
         var events: [MoonEvent] = []
         clan.age += 1
+        clan.patrolledThisMoon = []
         for id in clan.pregnancies.keys { clan.pregnancies[id]?.moons += 1 }
 
         var someoneJoined = false

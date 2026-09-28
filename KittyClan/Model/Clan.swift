@@ -28,6 +28,8 @@ struct LogEntry: Codable, Hashable, Sendable, Identifiable {
         case interaction
         /// Injuries, illnesses and recoveries.
         case health
+        /// What happened on a patrol the player sent out.
+        case patrol
     }
 
     var id = UUID()
@@ -47,6 +49,10 @@ struct Clan: Codable, Sendable {
     var leaderLives = maxLeaderLives
     var reputation = 80
     var pregnancies: [UUID: Pregnancy] = [:]
+    /// Loners, rogues and kittypets the Clan has met, and cats who were lost.
+    var outsiders: [Cat] = []
+    /// Cats who have already been on a patrol this moon.
+    var patrolledThisMoon: Set<UUID> = []
     /// How each cat feels about each other cat: `relationships[from][to]`.
     var relationships: [UUID: [UUID: Relationship]] = [:]
     var history: [MoonLog] = []
@@ -61,15 +67,17 @@ struct Clan: Codable, Sendable {
 
     subscript(id: UUID?) -> Cat? {
         guard let id else { return nil }
-        return cats.first { $0.id == id }
+        return cats.first { $0.id == id } ?? outsiders.first { $0.id == id }
     }
 
     func index(of id: UUID) -> Int? {
         cats.firstIndex { $0.id == id }
     }
 
+    /// Whether the cat is a living member of the Clan.
     func isAlive(_ id: UUID?) -> Bool {
-        self[id]?.isAlive ?? false
+        guard let id else { return false }
+        return cats.first { $0.id == id }?.isAlive ?? false
     }
 
     func relationship(from: UUID, to: UUID) -> Relationship? {

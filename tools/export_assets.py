@@ -173,7 +173,19 @@ def export_text():
         *sorted((cond / "risk_strings").glob("*.json")),
     ]
     files["injury"] = [lang / "events" / "injury" / "general.json", lang / "events" / "injury" / "forest.json"]
+    patrols = lang / "patrols"
+    files["patrols"] = [patrols / "new_cat.json", patrols / "new_cat_welcoming.json", patrols / "new_cat_hostile.json"]
+    files["patrols/general"] = sorted((patrols / "general").glob("*.json"))
+    for folder in ("hunting", "border", "training", "med"):
+        files[f"patrols/forest/{folder}"] = sorted((patrols / "forest" / folder).glob("*.json"))
     files[""].append(lang / "relationships.en.json")
+
+    with open(patrols / "prey_text_replacements.json", encoding="utf-8") as f:
+        prey = json.load(f)
+    forest_prey = {k: v for k, v in prey["abbreviations"].items() if k.startswith("f_")}
+    (text / "patrols").mkdir(parents=True, exist_ok=True)
+    with open(text / "patrols" / "prey.json", "w", encoding="utf-8") as f:
+        json.dump({abbr: prey[key] for abbr, key in forest_prey.items()}, f, ensure_ascii=False)
 
     for folder, paths in files.items():
         (text / folder).mkdir(parents=True, exist_ok=True)
@@ -184,6 +196,43 @@ def export_text():
                 data = data["en"]
             with open(text / folder / path.name, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False)
+
+    export_patrol_art([path for folder, paths in files.items() if folder.startswith("patrols") for path in paths])
+
+
+def export_patrol_art(patrol_files):
+    """Copy the art the bundled patrols reference, with lowercased names so lookups ignore case."""
+    art = CLANGEN / "resources" / "images" / "patrol_art"
+    out = OUT.parent / "PatrolArt"
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    available = {str(path.relative_to(art)).lower()[:-4]: path for path in art.rglob("*") if path.suffix.lower() == ".png"}
+
+    wanted = {"hunt_general_intro", "bord_general_intro", "train_general_intro", "med_general_intro"}
+    def collect(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key in ("patrol_art", "patrol_art_clean", "outcome_art", "outcome_art_clean") and isinstance(value, str):
+                    wanted.add(value.lower())
+                else:
+                    collect(value)
+        elif isinstance(node, list):
+            for item in node:
+                collect(item)
+    for path in patrol_files:
+        with open(path, encoding="utf-8") as f:
+            collect(json.load(f))
+
+    copied = 0
+    for name in sorted(wanted):
+        source = available.get(name)
+        if source is None or source.stat().st_size == 0:
+            continue
+        target = out / (name.replace("/", "__") + ".png")
+        shutil.copy(source, target)
+        copied += 1
+    print(f"copied {copied} of {len(wanted)} patrol art references")
 
 
 main()
