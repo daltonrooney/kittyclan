@@ -30,6 +30,8 @@ extension MoonEngine {
         guard let index = clan.index(of: id) else { return nil }
         var cat = clan.cats.remove(at: index)
         cat.lastClanRank = cat.rank
+        // Outsiders have no Clan rank, so their names lose "-kit", "-paw" and "-star" endings.
+        cat.rank = .warrior
         if clan.leader == id { clan.leader = nil }
         if clan.deputy == id { clan.deputy = nil }
         clan.pregnancies[id] = nil
@@ -371,12 +373,13 @@ extension MoonEngine {
 
     /// The leader's den choices for an outsider: hunt down, drive off, and invite in (search for, if lost).
     static func outsiderActions(for cat: Cat) -> [String] {
-        ["hunt", "drive", cat.isLost ? "search" : "invite"]
+        cat.age == .newborn ? [] : ["hunt", "drive", cat.isLost ? "search" : "invite"]
     }
 
     /// Records this moon's leader's den choice, rolling its success now as Clangen does.
     func planLeaderDen(_ interaction: String, target: LeaderDenPlan.Target, in clan: inout Clan, using rng: inout some RandomNumberGenerator) {
         guard let actor = Self.leaderDenActor(in: clan) else { return }
+        if case .outsider = target, !clan.isAlive(clan.leader) { return }
         let player = Self.temperament(of: clan)
         let succeeded: Bool = switch target {
         case .clan(let id):

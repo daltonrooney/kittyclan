@@ -33,6 +33,9 @@ struct ClanView: View {
             .sheet(isPresented: $model.isShowingSupplies) {
                 SuppliesSheet()
             }
+            .sheet(isPresented: $model.isShowingLeaderDen) {
+                LeaderDenSheet()
+            }
             .sheet(isPresented: $isShowingLog) {
                 NavigationStack {
                     MoonLogPanel()

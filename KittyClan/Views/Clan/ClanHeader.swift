@@ -21,7 +21,7 @@ struct ClanHeader: View {
                     }
                     .font(.headline)
                     .foregroundStyle(.secondary)
-                    SuppliesButton()
+                    ClanHeaderActions()
                         .padding(.top, 4)
                 }
                 Spacer()

@@ -20,6 +20,8 @@ final class AppModel {
     var selectedCat: Cat?
     var patrol: PatrolModel?
     var isShowingSupplies = false
+    var isShowingLeaderDen = false
+    var leaderDenTab = LeaderDenTab.clans
 
     @ObservationIgnored private(set) var sprites: SpriteCache?
     @ObservationIgnored private let store: ClanStore
@@ -101,6 +103,72 @@ final class AppModel {
         isAdvancing = true
         defer { isAdvancing = false }
         clan = await Self.feed(catIDs, in: current, engine: assets.engine)
+        await save()
+    }
+
+    // MARK: - Other Clans and outsiders
+
+    /// Who makes this moon's leader's den choices, if anyone can.
+    var leaderDenActor: Cat? {
+        clan.flatMap(MoonEngine.leaderDenActor)
+    }
+
+    /// Clangen only lets a living leader (or a helper standing in for a sick one) deal with outsiders.
+    var canPlanForOutsiders: Bool {
+        guard let clan else { return false }
+        return clan.isAlive(clan.leader) && leaderDenActor != nil
+    }
+
+    /// The player Clan's temperament as the other Clans see it, e.g. "wary & eager".
+    var clanTemperament: String {
+        clan.map { MoonEngine.temperament(of: $0).joined(separator: " & ") } ?? ""
+    }
+
+    /// Living outsiders the Clan knows of and who are still nearby.
+    var nearbyOutsiders: [Cat] {
+        clan?.outsiders.filter { $0.isAlive && $0.isNear } ?? []
+    }
+
+    var denOutsiders: [Cat] {
+        clan.map(MoonEngine.denOutsiders) ?? []
+    }
+
+    func isOutsider(_ cat: Cat) -> Bool {
+        clan?.outsiders.contains { $0.id == cat.id } ?? false
+    }
+
+    var enemyClan: OtherClan? {
+        clan?.otherClan(clan?.war.enemy)
+    }
+
+    /// Queues a leader's den choice for next moon, replacing any earlier choice of the same kind.
+    func planLeaderDen(_ action: DenAction, target: LeaderDenPlan.Target) async {
+        guard let assets, let current = clan, !isAdvancing else { return }
+        isAdvancing = true
+        defer { isAdvancing = false }
+        clan = await Self.planLeaderDen(action.rawValue, target: target, in: current, engine: assets.engine)
+        await save()
+    }
+
+    /// Clangen's wording for a queued choice, e.g. "Pinestar has decided to befriend RiverClan."
+    func planText(_ plan: LeaderDenPlan) -> String? {
+        guard let clan, let action = DenAction(rawValue: plan.interaction) else { return nil }
+        let actor = clan[plan.actor].map(displayName) ?? "The leader"
+        let target: String? = switch plan.target {
+        case .clan(let id): clan.otherClan(id)?.name
+        case .outsider(let id): clan[id].map(displayName)
+        }
+        guard let target else { return nil }
+        return "\(actor) has decided to \(action.phrase(target))."
+    }
+
+    /// Sends a living Clan cat away as an exiled loner and closes their profile.
+    func exile(_ id: Cat.ID) async {
+        guard let assets, let current = clan, current.isAlive(id), !isAdvancing else { return }
+        isAdvancing = true
+        defer { isAdvancing = false }
+        clan = await Self.exile(id, in: current, engine: assets.engine)
+        selectedCat = nil
         await save()
     }
 
@@ -208,6 +276,7 @@ final class AppModel {
         latestMoon = nil
         selectedCat = nil
         patrol = nil
+        isShowingLeaderDen = false
         state = .founding(FoundingModel(assets: assets))
     }
 
@@ -256,6 +325,22 @@ final class AppModel {
     }
 
     @concurrent
+    private static func planLeaderDen(_ action: String, target: LeaderDenPlan.Target, in clan: Clan, engine: MoonEngine) async -> Clan {
+        var clan = clan
+        var rng = SystemRandomNumberGenerator()
+        engine.planLeaderDen(action, target: target, in: &clan, using: &rng)
+        return clan
+    }
+
+    @concurrent
+    private static func exile(_ id: Cat.ID, in clan: Clan, engine: MoonEngine) async -> Clan {
+        var clan = clan
+        var rng = SystemRandomNumberGenerator()
+        engine.exileCat(id, in: &clan, using: &rng)
+        return clan
+    }
+
+    @concurrent
     private static func feed(_ catIDs: [Cat.ID], in clan: Clan, engine: MoonEngine) async -> Clan {
         var clan = clan
         engine.feed(catIDs, in: &clan, manual: true)
@@ -285,7 +370,9 @@ extension AppModel {
     /// without prey and herbs), `-timeskips N`, `-foundingStep cats|options`, `-autopick YES`,
     /// `-supplies YES|herbs` (opens the supplies sheet, optionally at the medicine den), `-feed YES` (feeds hungry cats), `-patrol hunting|border|training|herb_gathering|any`
     /// (picks cats and starts a patrol), `-patrolPickOnly YES` (stops at cat picking),
-    /// `-patrolResult YES` (proceeds to the result).
+    /// `-patrolResult YES` (proceeds to the result), `-war YES` (starts a war with the first neighbour),
+    /// `-outsiders YES` (exiles and loses a warrior if there are few outsiders, and expands the list),
+    /// `-leaderDen clans|outsiders` (opens the leader's den), `-leaderDenPlan YES` (queues a choice for each tab).
     func applyDebugLaunchArguments() async {
         let defaults = UserDefaults.standard
         guard let assets else { return }
@@ -316,10 +403,44 @@ extension AppModel {
             await save()
         }
 
+        await debugOtherClans()
         if defaults.bool(forKey: "feed") { await feed(hungryCats.map(\.id)) }
         selectedCat = debugCatToShow
         isShowingSupplies = defaults.string(forKey: "supplies") != nil
         await debugPatrol()
+    }
+
+    private func debugOtherClans() async {
+        let defaults = UserDefaults.standard
+        guard let assets else { return }
+        if defaults.bool(forKey: "war"), let current = clan, !current.war.atWar, !current.otherClans.isEmpty {
+            var advanced = current.age > 4 ? current : await Self.advance(current, moons: 5 - current.age, engine: assets.engine)
+            advanced.otherClans[0].setRelations(0)
+            advanced = await Self.advance(advanced, moons: 1, engine: assets.engine)
+            clan = advanced
+            latestMoon = advanced.age
+        }
+        if defaults.bool(forKey: "outsiders"), var current = clan, current.outsiders.filter(\.isAlive).count < 2 {
+            var rng = SystemRandomNumberGenerator()
+            let warriors = current.living.filter { $0.rank == .warrior }
+            if let exiled = warriors.first { assets.engine.exileCat(exiled.id, in: &current, using: &rng) }
+            if warriors.count > 1 { assets.engine.loseCat(warriors[1].id, in: &current, using: &rng) }
+            clan = current
+        }
+        if defaults.bool(forKey: "leaderDenPlan"), let current = clan {
+            if let other = current.otherClans.first, let action = DenAction(rawValue: MoonEngine.leaderDenActions(for: other.standing).1) {
+                await planLeaderDen(action, target: .clan(other.id))
+            }
+            if let outsider = denOutsiders.first(where: { $0.age != .newborn }),
+               let action = MoonEngine.outsiderActions(for: outsider).last.flatMap(DenAction.init(rawValue:)) {
+                await planLeaderDen(action, target: .outsider(outsider.id))
+            }
+        }
+        if let tab = defaults.string(forKey: "leaderDen") {
+            leaderDenTab = LeaderDenTab(rawValue: tab) ?? .clans
+            isShowingLeaderDen = true
+        }
+        await save()
     }
 
     private func debugPatrol() async {
@@ -334,10 +455,11 @@ extension AppModel {
         if defaults.bool(forKey: "patrolResult") { await patrol.choose(.proceed) }
     }
 
-    /// `-showCat first` opens the leader; `-showCat sick` opens the cat with the most known conditions; any other value opens the first cat whose name starts with it.
+    /// `-showCat first` opens the leader; `-showCat outsider` opens the first nearby outsider; `-showCat sick` opens the cat with the most known conditions; any other value opens the first cat whose name starts with it.
     var debugCatToShow: Cat? {
         guard let query = UserDefaults.standard.string(forKey: "showCat"), let clan else { return nil }
         if query == "first" { return clan[clan.leader] ?? clan.living.first }
+        if query == "outsider" { return nearbyOutsiders.first }
         if query == "sick" {
             return clan.living.max { $0.visibleConditions.count < $1.visibleConditions.count }
         }
