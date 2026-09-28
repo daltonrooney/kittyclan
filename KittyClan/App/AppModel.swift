@@ -25,6 +25,8 @@ final class AppModel {
     var isShowingAbout = false
     var isShowingLeaderDen = false
     var leaderDenTab = LeaderDenTab.clans
+    var isShowingAfterlife = false
+    var afterlifeTab = Afterlife.starClan
     /// Where each living cat sits in camp, in draw order. Re-rolled on entering camp and after each moon, as in Clangen.
     private(set) var campPlacements: [CampPlacement] = []
     /// Living cats who didn't fit in camp at the last roll.
@@ -197,6 +199,73 @@ final class AppModel {
         await save()
     }
 
+    // MARK: - Afterlife
+
+    func showAfterlife() {
+        afterlifeTab = clan?.guideAfterlife ?? .starClan
+        isShowingAfterlife = true
+    }
+
+    func isGuide(_ cat: Cat) -> Bool {
+        cat.id == clan?.guide
+    }
+
+    /// Whether this is the Clan's living leader.
+    func isLeader(_ cat: Cat) -> Bool {
+        cat.isAlive && cat.id == clan?.leader
+    }
+
+    /// e.g. "past StarClan warrior".
+    func pastRank(of cat: Cat) -> String? {
+        guard let clan else { return nil }
+        return assets?.afterlifeText.pastRank(of: cat, in: clan)
+    }
+
+    /// e.g. "dead for 12 moons".
+    func deadFor(_ cat: Cat) -> String? {
+        assets?.afterlifeText.deadFor(cat)
+    }
+
+    func backstory(of cat: Cat) -> String? {
+        guard let clan else { return nil }
+        return assets?.afterlifeText.backstory(of: cat, in: clan)
+    }
+
+    /// How the cat died, one line per death, then how the afterlife received them.
+    func deathHistory(of cat: Cat) -> [String] {
+        guard let clan, let text = assets?.afterlifeText else { return [] }
+        return text.deaths(of: cat, in: clan) + [text.acceptance(of: cat, in: clan)].compactMap(\.self)
+    }
+
+    func ceremony(of cat: Cat) -> [String] {
+        guard let clan else { return [] }
+        return assets?.afterlifeText.ceremony(of: cat, in: clan) ?? []
+    }
+
+    func fadedCount(in afterlife: Afterlife) -> Int {
+        clan?.faded.count(where: { $0.afterlife == afterlife }) ?? 0
+    }
+
+    /// Keeps a dead cat from fading from the afterlife.
+    func setPreventFading(_ prevent: Bool, for id: Cat.ID) async {
+        guard var current = clan, !isAdvancing else { return }
+        if let i = current.index(of: id) {
+            current.cats[i].preventFading = prevent
+        } else if let i = current.outsiders.firstIndex(where: { $0.id == id }) {
+            current.outsiders[i].preventFading = prevent
+        } else {
+            return
+        }
+        clan = current
+        await save()
+    }
+
+    func setFading(_ fading: Bool) async {
+        guard clan != nil, !isAdvancing else { return }
+        clan?.fading = fading
+        await save()
+    }
+
     func patrolArtURL(_ name: String?) -> URL? {
         assets?.patrols.library.artURL(name)
     }
@@ -303,6 +372,7 @@ final class AppModel {
         selectedCat = nil
         patrol = nil
         isShowingLeaderDen = false
+        isShowingAfterlife = false
         state = .founding(FoundingModel(assets: assets))
     }
 
@@ -399,7 +469,9 @@ extension AppModel {
     /// `-patrolResult YES` (proceeds to the result), `-war YES` (starts a war with the first neighbour),
     /// `-outsiders YES` (exiles and loses a warrior if there are few outsiders, and expands the list),
     /// `-leaderDen clans|outsiders` (opens the leader's den), `-leaderDenPlan YES` (queues a choice for each tab),
-    /// `-camp 1…4` (the camp for `-autofound` or the founding flow), `-foundingStep camp`, `-about YES`.
+    /// `-camp 1…4` (the camp for `-autofound` or the founding flow), `-foundingStep camp`, `-about YES`,
+    /// `-deaths N` (sends N living warriors, apprentices or elders to the afterlife),
+    /// `-afterlife YES|starclan|dark_forest|unknown_residence` (opens the afterlife), `-afterlifeSort rank|death|name`.
     /// The clan screen reads `-clanView camp|list` and `-denLabels YES|NO` straight from its `@AppStorage`.
     func applyDebugLaunchArguments() async {
         let defaults = UserDefaults.standard
@@ -437,6 +509,7 @@ extension AppModel {
         }
 
         await debugOtherClans()
+        await debugAfterlife()
         if defaults.bool(forKey: "feed") { await feed(hungryCats.map(\.id)) }
         selectedCat = debugCatToShow
         isShowingSupplies = defaults.string(forKey: "supplies") != nil
@@ -479,6 +552,24 @@ extension AppModel {
         await save()
     }
 
+    private func debugAfterlife() async {
+        let defaults = UserDefaults.standard
+        let deaths = defaults.integer(forKey: "deaths")
+        if deaths > 0, var current = clan {
+            var rng = SystemRandomNumberGenerator()
+            let ranks: [Rank] = [.warrior, .apprentice, .elder]
+            for cat in current.living.filter({ ranks.contains($0.rank) }).prefix(deaths) {
+                current.sendToAfterlife(cat.id, history: "m_c died of a mysterious illness.", using: &rng)
+            }
+            clan = current
+            await save()
+        }
+        if let tab = defaults.string(forKey: "afterlife") {
+            showAfterlife()
+            if let afterlife = Afterlife(rawValue: tab) { afterlifeTab = afterlife }
+        }
+    }
+
     private func debugPatrol() async {
         let defaults = UserDefaults.standard
         guard let request = defaults.string(forKey: "patrol") else { return }
@@ -496,11 +587,14 @@ extension AppModel {
         return (1...CampLibrary.names.count).contains(camp) ? camp : nil
     }
 
-    /// `-showCat first` opens the leader; `-showCat outsider` opens the first nearby outsider; `-showCat sick` opens the cat with the most known conditions; any other value opens the first cat whose name starts with it.
+    /// `-showCat first` opens the leader; `-showCat guide` opens the guide; `-showCat dead` opens the most recently dead Clan cat;
+    /// `-showCat outsider` opens the first nearby outsider; `-showCat sick` opens the cat with the most known conditions; any other value opens the first cat whose name starts with it.
     var debugCatToShow: Cat? {
         guard let query = UserDefaults.standard.string(forKey: "showCat"), let clan else { return nil }
         if query == "first" { return clan[clan.leader] ?? clan.living.first }
         if query == "outsider" { return nearbyOutsiders.first }
+        if query == "guide" { return clan[clan.guide] }
+        if query == "dead" { return clan.dead.last { $0.id != clan.guide } }
         if query == "sick" {
             return clan.living.max { $0.visibleConditions.count < $1.visibleConditions.count }
         }

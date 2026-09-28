@@ -15,7 +15,7 @@ struct CatRoster: View {
                             RankSection(title: rank.sectionTitle, cats: cats)
                         }
                     }
-                    RememberedSection(cats: model.clan?.dead ?? [])
+                    AfterlifeLinkSection()
                     OutsidersSection(isExpanded: Self.expandsOutsiders)
                         .id(Self.outsiders)
                 }

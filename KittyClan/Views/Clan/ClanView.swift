@@ -51,6 +51,9 @@ struct ClanView: View {
             .sheet(isPresented: $model.isShowingLeaderDen) {
                 LeaderDenSheet()
             }
+            .sheet(isPresented: $model.isShowingAfterlife) {
+                AfterlifeSheet()
+            }
             .sheet(isPresented: $model.isShowingAbout) {
                 AboutSheet()
             }

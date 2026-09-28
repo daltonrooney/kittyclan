@@ -17,7 +17,7 @@ struct CatAboutSection: View {
                 if let rank = cat.lastClanRank {
                     LabeledContent("Was a", value: rank.label)
                 }
-            } else {
+            } else if cat.isAlive {
                 LabeledContent("Rank", value: cat.rank.label)
             }
             LabeledContent("Age", value: "\(cat.age.label), \(cat.moonsText)")
@@ -37,8 +37,8 @@ struct CatAboutSection: View {
                 LabeledContent("Origin", value: cat.origin.rawValue.capitalized)
             }
             LabeledContent("Experience", value: cat.experience, format: .number)
-            if cat.isDead {
-                LabeledContent("Remembered", value: cat.diedAtClanAge.map { "Since moon \($0)" } ?? "Yes")
+            if cat.isDead, let moon = cat.diedAtClanAge, moon >= 0 {
+                LabeledContent("Died", value: moon == 0 ? "At the founding" : "Moon \(moon)")
             }
         }
     }

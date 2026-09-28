@@ -6,6 +6,8 @@ struct ClanMenu: View {
 
     var body: some View {
         Menu("Clan options", systemImage: "ellipsis.circle") {
+            Toggle("Dead cats fade", systemImage: "aqi.low", isOn: fading)
+            Divider()
             Button("About KittyClan", systemImage: "info.circle", action: showAbout)
             Button("Start a new Clan", systemImage: "arrow.counterclockwise", role: .destructive, action: confirmNewClan)
         }
@@ -13,6 +15,14 @@ struct ClanMenu: View {
             Button("Start a new Clan", role: .destructive, action: model.startNewClan)
         } message: {
             Text("\(model.clan?.displayName ?? "Your Clan") and all of its history will be gone forever.")
+        }
+    }
+
+    private var fading: Binding<Bool> {
+        Binding {
+            model.clan?.fading ?? true
+        } set: { fading in
+            Task { await model.setFading(fading) }
         }
     }
 
