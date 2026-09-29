@@ -161,9 +161,7 @@ struct PatrolOutcome: Sendable {
     ]
 
     init?(_ json: [String: Any], patrolSlots: Set<String>) {
-        guard Set(json.keys).isSubset(of: Self.keys),
-              Constraint.listAllows(json["location"] as? [String], "forest", normalize: { String($0.split(separator: ":")[0]) })
-        else { return nil }
+        guard Set(json.keys).isSubset(of: Self.keys) else { return nil }
 
         var slots: [PatrolSlot] = []
         for (abbr, spec) in json["involved_cats"] as? [String: [String: Any]] ?? [:] {
@@ -241,6 +239,7 @@ struct PatrolEvent: Sendable {
     let fail: [PatrolOutcome]
     let antagSuccess: [PatrolOutcome]
     let antagFail: [PatrolOutcome]
+    let location: [String]
     let weight: Int
     /// The prey size most success outcomes bring home, used to balance hunts by season.
     let dominantPrey: String?
@@ -255,10 +254,9 @@ struct PatrolEvent: Sendable {
     ]
 
     init?(_ json: [String: Any]) {
-        guard Set(json.keys).isSubset(of: Self.keys), let id = json["event_id"] as? String,
-              Constraint.listAllows(json["location"] as? [String], "forest", normalize: { String($0.split(separator: ":")[0]) })
-        else { return nil }
+        guard Set(json.keys).isSubset(of: Self.keys), let id = json["event_id"] as? String else { return nil }
         self.id = id
+        location = json["location"] as? [String] ?? []
         types = (json["types"] as? [String] ?? []).compactMap(PatrolType.init)
         guard !types.isEmpty else { return nil }
 
@@ -303,13 +301,14 @@ struct PatrolEvent: Sendable {
 
         var weight = 1
         if !season.isEmpty, !season.contains("any") { weight += 2 * max(0, 4 - season.count) }
+        if !location.isEmpty, !location.contains("any") { weight += 2 * max(0, 6 - location.count) }
         weight += 2 * tags.count + slots.reduce(0) { $0 + $1.weight }
         weight += 2 * max(0, requiredCatTypes.count - 1) + 20 * rules.count
         self.weight = max(weight, 1)
     }
 }
 
-/// Clangen's forest and general patrols, plus the new-cat patrols.
+/// Clangen's general and per-biome patrols, plus the new-cat and other-Clan patrols.
 struct PatrolLibrary: @unchecked Sendable {
     private let patrols: [String: [PatrolEvent]]
     let newCatPatrols: [String: [PatrolEvent]]
@@ -326,8 +325,10 @@ struct PatrolLibrary: @unchecked Sendable {
         }
         var patrols: [String: [PatrolEvent]] = [:]
         for type in PatrolType.allCases {
-            for season in Season.allCases.map({ $0.rawValue.lowercased() }) + ["any"] {
-                patrols["\(type.folder)/\(season)"] = load("forest/\(type.folder)/\(season).json")
+            for biome in Biome.allCases {
+                for season in Season.allCases.map({ $0.rawValue.lowercased() }) + ["any"] {
+                    patrols["\(biome.key)/\(type.folder)/\(season)"] = load("\(biome.key)/\(type.folder)/\(season).json")
+                }
             }
             patrols["\(type.folder)/general"] = load("general/\(type.folder).json")
         }
@@ -343,11 +344,13 @@ struct PatrolLibrary: @unchecked Sendable {
         return try PatrolLibrary(directory: text, artDirectory: Bundle.main.url(forResource: "PatrolArt", withExtension: nil))
     }
 
-    /// Patrols for a type this season: the general file, forest "any", and the forest season file.
-    func patrols(for type: PatrolType, season: Season) -> [PatrolEvent] {
+    /// Patrols for a type this season: the general file plus the biome's "any" and season files,
+    /// limited to the Clan's biome and camp.
+    func patrols(for type: PatrolType, season: Season, biome: Biome = .forest, camp: Int = 1) -> [PatrolEvent] {
         let folder = type.folder
-        return (patrols["\(folder)/general"] ?? []) + (patrols["\(folder)/any"] ?? [])
-            + (patrols["\(folder)/\(season.rawValue.lowercased())"] ?? [])
+        let all = (patrols["\(folder)/general"] ?? []) + (patrols["\(biome.key)/\(folder)/any"] ?? [])
+            + (patrols["\(biome.key)/\(folder)/\(season.rawValue.lowercased())"] ?? [])
+        return all.filter { Constraint.locationAllows($0.location, biome: biome, camp: camp) }
     }
 
     var count: Int { Set(patrols.values.flatMap { $0.map(\.id) }).count }

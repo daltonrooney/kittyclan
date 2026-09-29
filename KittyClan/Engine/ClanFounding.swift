@@ -44,6 +44,7 @@ struct ClanFounding: Sendable {
         members: [Cat],
         preyAndHerbs: Bool = true,
         canStarve: Bool = false,
+        biome: Biome = .forest,
         camp: Int = 1,
         engine: MoonEngine,
         using rng: inout some RandomNumberGenerator
@@ -65,6 +66,7 @@ struct ClanFounding: Sendable {
             MoonEngine.assignMentor(to: cat.id, in: &clan, using: &rng)
         }
         engine.relationships?.initializeFounders(&clan, using: &rng)
+        clan.biome = biome
         clan.camp = camp
         clan.preyAndHerbs = preyAndHerbs
         clan.canStarve = canStarve

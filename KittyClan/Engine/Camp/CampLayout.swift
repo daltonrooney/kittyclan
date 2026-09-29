@@ -42,22 +42,24 @@ struct CampLayout: Sendable {
     }
 }
 
-/// Clangen's forest camps (Classic, Gully, Grotto, Lakeside) and their seasonal backgrounds.
+/// Clangen's camps for each biome and their seasonal backgrounds.
 struct CampLibrary: Sendable {
-    static let names = ["Classic", "Gully", "Grotto", "Lakeside"]
+    static let names = Biome.forest.campNames
 
-    let layouts: [Int: CampLayout]
+    private let byBiome: [Biome: [Int: CampLayout]]
     private let directory: URL
 
     init(directory: URL) throws {
         self.directory = directory
         let json = try JSONSerialization.jsonObject(with: Data(contentsOf: directory.appending(path: "layouts.json"))) as? [String: [String: Any]] ?? [:]
         let fallback = json["default"].flatMap(CampLayout.init)
-        var layouts: [Int: CampLayout] = [:]
-        for camp in 1...4 {
-            layouts[camp] = json["Forestcamp\(camp)"].flatMap(CampLayout.init) ?? fallback
+        var byBiome: [Biome: [Int: CampLayout]] = [:]
+        for biome in Biome.allCases {
+            for camp in 1...4 {
+                byBiome[biome, default: [:]][camp] = json["\(biome.rawValue)camp\(camp)"].flatMap(CampLayout.init) ?? fallback
+            }
         }
-        self.layouts = layouts
+        self.byBiome = byBiome
     }
 
     static func bundled() throws -> CampLibrary {
@@ -65,16 +67,24 @@ struct CampLibrary: Sendable {
         return try CampLibrary(directory: url)
     }
 
+    /// Forest layouts by camp number.
+    var layouts: [Int: CampLayout] { byBiome[.forest] ?? [:] }
+
+    /// A camp's den labels and cat spots. Plains' Grasslands has none of its own and uses Clangen's default.
+    func layout(biome: Biome, camp: Int) -> CampLayout? {
+        byBiome[biome]?[camp] ?? byBiome[biome]?[1]
+    }
+
     /// The background for a camp in a season, light or dark.
-    func background(camp: Int, season: Season, dark: Bool) -> URL {
+    func background(biome: Biome = .forest, camp: Int, season: Season, dark: Bool) -> URL {
         let seasonKey = season.rawValue.lowercased().replacingOccurrences(of: "-", with: "")
-        return directory.appending(path: "\(seasonKey)_camp\(camp)_\(dark ? "dark" : "light").png")
+        return directory.appending(path: "\(biome.key)/\(seasonKey)_camp\(camp)_\(dark ? "dark" : "light").png")
     }
 
     /// Clangen's `choose_cat_positions`: each spot holds up to two cats, dens are chosen by
     /// rank weights, and when a den fills, cats spill into others. Newborns hide.
-    func place(_ cats: [Cat], camp: Int, using rng: inout some RandomNumberGenerator) -> [(cat: UUID, point: CGPoint)] {
-        guard let layout = layouts[camp] ?? layouts[1] else { return [] }
+    func place(_ cats: [Cat], biome: Biome = .forest, camp: Int, using rng: inout some RandomNumberGenerator) -> [(cat: UUID, point: CGPoint)] {
+        guard let layout = layout(biome: biome, camp: camp) else { return [] }
         let order: [Den] = [.nursery, .leader, .elder, .medicine, .apprentice, .clearing, .warrior]
         var free = layout.spots.mapValues { $0 + $0 }
         var placed: [(UUID, CGPoint)] = []

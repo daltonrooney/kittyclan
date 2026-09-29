@@ -116,6 +116,20 @@ struct Constraint: Sendable {
         return list.map(normalize).contains(value)
     }
 
+    /// Clangen's `event_for_location`: "biome" or "biome:campA_campB" entries. Any "-" entry makes
+    /// every entry an exclusion, as in Clangen, so ["forest", "-plains:camp3"] excludes forest too.
+    static func locationAllows(_ list: [String]?, biome: Biome, camp: Int) -> Bool {
+        guard let list, !list.isEmpty, !list.contains("any") else { return true }
+        let exclusionary = list.contains { $0.hasPrefix("-") }
+        for entry in list {
+            let place = exclusionary ? entry.replacingOccurrences(of: "-", with: "") : entry
+            let parts = place.split(separator: ":", maxSplits: 1).map(String.init)
+            let camps = parts.count > 1 ? parts[1].split(separator: "_").map(String.init) : ["any"]
+            if parts[0] == biome.key, camps.contains("any") || camps.contains("camp\(camp)") { return !exclusionary }
+        }
+        return exclusionary
+    }
+
     private static let flagTags: Set<String> = [
         "classic", "no_body", "all_lives", "some_lives", "lives_remain", "high_lives", "mid_lives", "low_lives", "romance",
         "adoption",

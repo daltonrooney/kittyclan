@@ -131,15 +131,13 @@ struct ThoughtBlock: Sendable {
     let relationships: [RelationshipRule]
     let seasons: [String]
     let tags: [String]
+    let location: [String]?
     let weight: Int
 
     init?(_ json: [String: Any]) {
         guard Set(json.keys).isSubset(of: ["event_id", "strings", "involved_cats", "relationship_constraint", "season", "location", "tags"]),
               let id = json["event_id"] as? String
         else { return nil }
-        if let location = json["location"] as? [String], !Constraint.listAllows(location, "forest", normalize: { String($0.split(separator: ":")[0]) }) {
-            return nil
-        }
         let strings = (json["strings"] as? [String] ?? []).filter {
             Constraint.textIsSupported($0, allowing: ["m_c", "r_c"])
         }
@@ -163,6 +161,7 @@ struct ThoughtBlock: Sendable {
         guard tags.allSatisfy(Constraint.isSupportedTag) else { return nil }
 
         self.id = id
+        location = json["location"] as? [String]
         self.strings = strings
         self.main = main
         self.random = random
@@ -177,6 +176,7 @@ struct ThoughtBlock: Sendable {
 
     func fits(_ cat: Cat, about other: Cat?, in context: ThoughtContext) -> Bool {
         let clan = context.clan
+        if !Constraint.locationAllows(location, biome: clan.biome, camp: clan.camp) { return false }
         if !seasons.isEmpty, !Constraint.listAllows(seasons.map { $0.lowercased() }, clan.season.rawValue.lowercased()) { return false }
         if !Constraint.tagsAllow(tags, in: clan, cat: cat) { return false }
         if let main, !main.matches(cat, main: nil, in: context) { return false }

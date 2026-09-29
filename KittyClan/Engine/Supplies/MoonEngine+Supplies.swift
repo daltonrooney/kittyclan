@@ -242,7 +242,7 @@ extension MoonEngine {
         var remaining = limit
         var found: [String: Int] = [:]
         for name in herbsByNeed(in: clan) where kinds > 0 {
-            guard let herb = herbLibrary.herb(name), let rarity = herb.rarity[clan.season.rawValue.lowercased()], rarity > 0,
+            guard let herb = herbLibrary.herb(name), case let rarity = herb.rarity(in: clan.biome, clan.season), rarity > 0,
                   oneIn(rarity, &rng)
             else { continue }
             var modifier = cleverness

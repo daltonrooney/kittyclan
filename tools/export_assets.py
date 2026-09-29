@@ -23,6 +23,7 @@ from PIL import Image
 CLANGEN = Path(sys.argv[1]).resolve()
 OUT = Path(__file__).resolve().parent.parent / "KittyClan" / "Resources" / "Sprites"
 DICTS = CLANGEN / "sprites" / "dicts"
+BIOMES = ["forest", "mountainous", "plains", "beach"]
 
 SHEETS = [
     "lineart", "heterochromiamask", "eyes", "pelt_parts_masks", "skin",
@@ -197,8 +198,8 @@ def export_text():
         shutil.rmtree(text)
     files = {
         "ceremonies": sorted((lang / "events" / "ceremonies").glob("*.json")),
-        "death": [lang / "events" / "death" / "general.json", lang / "events" / "death" / "forest.json"],
-        "misc": [lang / "events" / "misc" / "general.json", lang / "events" / "misc" / "forest.json"],
+        "death": [lang / "events" / "death" / f"{name}.json" for name in ["general"] + BIOMES],
+        "misc": [lang / "events" / "misc" / f"{name}.json" for name in ["general"] + BIOMES],
         "": [
             lang / "pronouns.en.json",
             lang / "conditions" / "pregnancy.json",
@@ -226,7 +227,7 @@ def export_text():
         cond / "herbs.en.json",
         lang / "screens" / "med_den_messages.json",
     ]
-    files["injury"] = [lang / "events" / "injury" / "general.json", lang / "events" / "injury" / "forest.json"]
+    files["injury"] = [lang / "events" / "injury" / f"{name}.json" for name in ["general"] + BIOMES]
     patrols = lang / "patrols"
     files["patrols"] = [
         patrols / "new_cat.json", patrols / "new_cat_welcoming.json", patrols / "new_cat_hostile.json",
@@ -236,11 +237,12 @@ def export_text():
     files["war"] = [events / "war.json"]
     files["leader_den/success"] = sorted((events / "leader_den" / "success").glob("*.json"))
     files["leader_den/fail"] = sorted((events / "leader_den" / "fail").glob("*.json"))
-    files["new_cat"] = [events / "new_cat" / "general.json", events / "new_cat" / "forest.json"]
+    files["new_cat"] = [events / "new_cat" / f"{name}.json" for name in ["general"] + BIOMES]
     files["outsider_deaths"] = [events / "death" / "outsider_deaths" / "outsider_deaths.json"]
     files["patrols/general"] = sorted((patrols / "general").glob("*.json"))
-    for folder in ("hunting", "border", "training", "med"):
-        files[f"patrols/forest/{folder}"] = sorted((patrols / "forest" / folder).glob("*.json"))
+    for biome in BIOMES:
+        for folder in ("hunting", "border", "training", "med"):
+            files[f"patrols/{biome}/{folder}"] = sorted((patrols / biome / folder).glob("*.json"))
     files[""].append(lang / "relationships.en.json")
     files[""].append(lang / "cat" / "skills.en.json")
     thoughts = lang / "thoughts"
@@ -254,10 +256,12 @@ def export_text():
 
     with open(patrols / "prey_text_replacements.json", encoding="utf-8") as f:
         prey = json.load(f)
-    forest_prey = {k: v for k, v in prey["abbreviations"].items() if k.startswith("f_")}
+    prefixes = tuple(biome[0] + "_" for biome in BIOMES)
+    abbreviations = {k: v for k, v in prey["abbreviations"].items() if k.startswith(prefixes)}
+    abbreviations["b_mp_dl_p"] = "beach_midprey_dryland_plural"
     (text / "patrols").mkdir(parents=True, exist_ok=True)
     with open(text / "patrols" / "prey.json", "w", encoding="utf-8") as f:
-        json.dump({abbr: prey[key] for abbr, key in forest_prey.items()}, f, ensure_ascii=False)
+        json.dump({abbr: prey[key] for abbr, key in abbreviations.items() if key in prey}, f, ensure_ascii=False)
 
     for folder, paths in files.items():
         (text / folder).mkdir(parents=True, exist_ok=True)
@@ -278,11 +282,13 @@ def export_camps():
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
-    for png in sorted((CLANGEN / "resources" / "images" / "camp_bg" / "forest").glob("*.png")):
-        shutil.copy(png, out / png.name)
+    for biome in BIOMES:
+        (out / biome).mkdir()
+        for png in sorted((CLANGEN / "resources" / "images" / "camp_bg" / biome).glob("*.png")):
+            shutil.copy(png, out / biome / png.name)
     with open(CLANGEN / "resources" / "placements.json", encoding="utf-8") as f:
         placements = json.load(f)
-    layouts = {key: value for key, value in placements.items() if key.startswith("Forest") or key == "default"}
+    layouts = {key: value for key, value in placements.items() if key == "default" or key.startswith(tuple(b.capitalize() for b in BIOMES))}
     with open(out / "layouts.json", "w", encoding="utf-8") as f:
         json.dump(layouts, f)
 

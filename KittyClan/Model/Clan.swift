@@ -88,7 +88,8 @@ struct Clan: Codable, Sendable {
     var nutrition: [UUID: Nutrition] = [:]
     var herbs = HerbSupply()
     var otherClans: [OtherClan] = []
-    /// Which of Clangen's four forest camps the Clan lives in (1–4).
+    var biome = Biome.forest
+    /// Which of the biome's four camps the Clan lives in (1–4).
     var camp = 1
     var war = War()
     /// This moon's leader's den choices: one about another Clan, one about an outsider.
@@ -203,6 +204,7 @@ extension Clan {
         nutrition = try c.decodeIfPresent([UUID: Nutrition].self, forKey: .nutrition) ?? [:]
         herbs = try c.decodeIfPresent(HerbSupply.self, forKey: .herbs) ?? HerbSupply()
         otherClans = try c.decodeIfPresent([OtherClan].self, forKey: .otherClans) ?? []
+        biome = try c.decodeIfPresent(Biome.self, forKey: .biome) ?? .forest
         camp = try c.decodeIfPresent(Int.self, forKey: .camp) ?? 1
         war = try c.decodeIfPresent(War.self, forKey: .war) ?? War()
         leaderDenPlan = try c.decodeIfPresent(LeaderDenPlan.self, forKey: .leaderDenPlan)

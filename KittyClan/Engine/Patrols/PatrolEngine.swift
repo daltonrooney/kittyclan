@@ -35,9 +35,14 @@ struct PatrolEngine: Sendable {
     let template: TextTemplate
 
     private static let patrolRanks: Set<Rank> = [.warrior, .deputy, .leader, .apprentice, .medicineCat, .medicineApprentice]
-    private static let preyWeights: [Season: [Int]] = [
-        .newleaf: [2, 5, 5, 2, 1], .greenleaf: [1, 3, 6, 4, 2], .leafFall: [2, 4, 5, 3, 1], .leafBare: [3, 6, 4, 2, 0],
-    ]
+    /// Clangen's `[prey.patrol_balance]`: tiny to huge prey weights by biome and season.
+    private static let preyWeights: [Biome: [Season: [Int]]] = {
+        let forest: [Season: [Int]] = [.newleaf: [2, 5, 5, 2, 1], .greenleaf: [1, 3, 6, 4, 2], .leafFall: [2, 4, 5, 3, 1], .leafBare: [3, 6, 4, 2, 0]]
+        var mountainous = forest
+        mountainous[.leafFall] = [2, 6, 4, 2, 1]
+        let beach: [Season: [Int]] = [.newleaf: [2, 5, 5, 2, 1], .greenleaf: [2, 5, 5, 2, 1], .leafFall: [2, 5, 5, 2, 1], .leafBare: [2, 6, 4, 2, 1]]
+        return [.forest: forest, .mountainous: mountainous, .plains: forest, .beach: beach]
+    }()
     private static let preySizes = ["tiny", "small", "medium", "large", "huge"]
 
     /// Cats who can go on patrol right now.
@@ -73,14 +78,14 @@ struct PatrolEngine: Sendable {
 
         if clan.otherClans.isEmpty { clan.otherClans = engine.generateOtherClans(for: clan, using: &rng) }
         let otherClan = clan.otherClans.randomElement(using: &rng)
-        var candidates = library.patrols(for: type, season: clan.season)
+        var candidates = library.patrols(for: type, season: clan.season, biome: clan.biome, camp: clan.camp)
         if type == .hunting { candidates = balanceHunting(candidates, clan: clan, using: &rng) }
         if let otherClan {
             candidates += library.otherClanPatrols[""] ?? []
             if otherClan.standing != .neutral { candidates += library.otherClanPatrols[otherClan.standing.rawValue] ?? [] }
         }
         candidates += outsiderPatrols(in: clan, using: &rng)
-        candidates = candidates.filter { $0.types.contains(type) }
+        candidates = candidates.filter { $0.types.contains(type) && Constraint.locationAllows($0.location, biome: clan.biome, camp: clan.camp) }
         if type == .herbGathering, candidates.contains(where: \.givesHerbs) { candidates = candidates.filter(\.givesHerbs) }
 
         let romance = candidates.filter(\.isRomance)
@@ -148,7 +153,7 @@ struct PatrolEngine: Sendable {
     }
 
     private func balanceHunting(_ patrols: [PatrolEvent], clan: Clan, using rng: inout some RandomNumberGenerator) -> [PatrolEvent] {
-        let weights = Self.preyWeights[clan.season] ?? [1, 1, 1, 1, 1]
+        let weights = Self.preyWeights[clan.biome]?[clan.season] ?? [1, 1, 1, 1, 1]
         let size = weighted(Array(zip(Self.preySizes, weights)), &rng)
         let matching = patrols.filter { $0.dominantPrey == size }
         return matching.isEmpty ? patrols : matching

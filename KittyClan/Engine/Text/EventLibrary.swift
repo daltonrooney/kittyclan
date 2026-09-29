@@ -152,20 +152,29 @@ struct EventLibrary: Sendable {
         honors = try load("ceremonies/ceremony_traits.json") as? [String: [String]] ?? [:]
 
         func group(_ list: [ShortEvent]) -> [Int: [ShortEvent]] { Dictionary(grouping: list, by: \.frequency) }
-        func parse(_ paths: String...) throws -> [ShortEvent] {
-            try paths.flatMap { try events($0) }.compactMap(ShortEvent.init)
+        /// General events plus every biome's own file; a biome file's untagged events stay in that biome.
+        func parse(_ type: String) throws -> [ShortEvent] {
+            let general = try events("\(type)/general.json")
+            let biomes = try Biome.allCases.flatMap { biome in
+                try events("\(type)/\(biome.key).json").map { json in
+                    var json = json
+                    if (json["location"] as? [String] ?? ["any"]).contains("any") { json["location"] = [biome.key] }
+                    return json
+                }
+            }
+            return (general + biomes).compactMap(ShortEvent.init)
         }
-        let deathEvents = try parse("death/general.json", "death/forest.json").filter { $0.plain }
+        let deathEvents = try parse("death").filter { $0.plain }
         deaths = Dictionary(grouping: deathEvents, by: \.subType).mapValues(group)
         func bySubType(_ list: [ShortEvent]) -> [String: [Int: [ShortEvent]]] {
             Dictionary(grouping: list.filter { ["", "war"].contains($0.subType) }, by: \.subType).mapValues(group)
         }
-        let miscEvents = try parse("misc/general.json", "misc/forest.json")
+        let miscEvents = try parse("misc")
         misc = bySubType(miscEvents.filter { !$0.isAccessory })
         accessoryEvents = Dictionary(grouping: miscEvents.filter(\.isAccessory), by: \.subType).mapValues(group)
-        injuryEvents = bySubType(try parse("injury/general.json", "injury/forest.json").filter { $0.plain })
+        injuryEvents = bySubType(try parse("injury").filter { $0.plain })
 
-        newCatEvents = bySubType(try parse("new_cat/general.json", "new_cat/forest.json").filter { $0.plain && !$0.newCats.isEmpty })
+        newCatEvents = bySubType(try parse("new_cat").filter { $0.plain && !$0.newCats.isEmpty })
         outsiderDeaths = try load("outsider_deaths/outsider_deaths.json") as? [String: [String]] ?? [:]
 
         let warJSON = try load("war/war.json") as? [String: Any] ?? [:]
@@ -385,6 +394,7 @@ private struct ShortEvent: Sendable {
     let deathHistories: [String: String]
     let isAccessory: Bool
     let newAccessory: [String]
+    let location: [String]
     let weight: Int
 
     /// Neither an accessory event nor one that gives an accessory.
@@ -409,6 +419,7 @@ private struct ShortEvent: Sendable {
 
     /// Clangen's `other_clan` and `outsider` filters.
     func fits(_ context: EventLibrary.Context, clan: Clan) -> Bool {
+        guard Constraint.locationAllows(location, biome: clan.biome, camp: clan.camp) else { return false }
         if needsOtherClan {
             guard let other = context.otherClan else { return false }
             if !otherClanStandings.isEmpty, !otherClanStandings.contains(other.standing.rawValue) { return false }
@@ -458,7 +469,7 @@ private struct ShortEvent: Sendable {
         reputationChange = outsiderJSON?["changed"] as? Int ?? 0
         guard subTypes.count <= 1 else { return nil }
         let location = json["location"] as? [String] ?? ["any"]
-        guard Constraint.listAllows(location, "forest", normalize: { String($0.split(separator: ":")[0]) }) else { return nil }
+        self.location = location
         let tags = json["tags"] as? [String] ?? []
         guard tags.allSatisfy(Constraint.isSupportedTag) else { return nil }
 

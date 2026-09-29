@@ -5,8 +5,12 @@ struct HerbLibrary: Sendable {
     struct Herb: Sendable {
         let name: String
         let expiration: Int
-        /// 1-in-N odds of finding it on a gathering attempt, by season (0 = none).
-        let rarity: [String: Int]
+        /// 1-in-N odds of finding it on a gathering attempt, by biome key and season (0 = none).
+        let rarity: [String: [String: Int]]
+
+        func rarity(in biome: Biome, _ season: Season) -> Int {
+            rarity[biome.key]?[season.rawValue.lowercased()] ?? 0
+        }
     }
 
     let herbs: [Herb]
@@ -22,8 +26,7 @@ struct HerbLibrary: Sendable {
         let info = try load("herb_info") as? [String: [String: Any]] ?? [:]
         herbs = info.keys.sorted().map { name in
             let entry = info[name]!
-            let forest = (entry["rarity"] as? [String: [String: Int]])?["forest"] ?? [:]
-            return Herb(name: name, expiration: entry["expiration"] as? Int ?? 6, rarity: forest)
+            return Herb(name: name, expiration: entry["expiration"] as? Int ?? 6, rarity: entry["rarity"] as? [String: [String: Int]] ?? [:])
         }
         let text = try load("herbs.en") as? [String: Any] ?? [:]
         var names: [String: (String, String)] = [:]
