@@ -65,12 +65,15 @@ struct TextTemplate: Sendable {
 
     /// Clangen's `adjust_list_text`: "A", "A and B", or "A, B, and C".
     func list(_ cats: [Cat]) -> String {
-        let labels = cats.map { names.display($0.name, rank: $0.rank) }
+        Self.joined(cats.map { names.display($0.name, rank: $0.rank) })
+    }
+
+    static func joined(_ labels: [String]) -> String {
         switch labels.count {
-        case 0: return ""
-        case 1: return labels[0]
-        case 2: return "\(labels[0]) and \(labels[1])"
-        default: return labels.dropLast().joined(separator: ", ") + ", and " + labels.last!
+        case 0: ""
+        case 1: labels[0]
+        case 2: "\(labels[0]) and \(labels[1])"
+        default: labels.dropLast().joined(separator: ", ") + ", and " + labels.last!
         }
     }
 

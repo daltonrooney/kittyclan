@@ -85,7 +85,7 @@ extension MoonEngine {
         if eaten > 0 { clan.freshKill.log.append("The Clan ate \(Int(eaten.rounded())) pieces of prey.") }
 
         var caught = autoCatch(in: clan, using: &rng)
-        if !clan.canStarve, !patrolled { caught += Self.huntingFocusCatch(in: clan) }
+        if !clan.canStarve, !patrolled, clan.focus != .hunting { caught += Self.huntingFocusCatch(in: clan) }
         clan.freshKill.add(caught)
         if caught > 0 { clan.freshKill.log.append("The Clan's hunters caught \(Int(caught)) pieces of prey this moon.") }
     }
@@ -233,11 +233,12 @@ extension MoonEngine {
     ]
 
     /// Clangen's `get_found_herbs`: SENSE finds more kinds of herb, CLEVER finds more of each.
-    func findHerbs(by cat: Cat, limit: Int? = nil, in clan: Clan, using rng: inout some RandomNumberGenerator) -> [String: Int] {
+    /// - Parameter bonus: the herb-gathering focus doubles the kinds found and the amount of each.
+    func findHerbs(by cat: Cat, limit: Int? = nil, bonus: Bool = false, in clan: Clan, using rng: inout some RandomNumberGenerator) -> [String: Int] {
         guard let herbLibrary else { return [:] }
         let weights = Self.seasonWeights[clan.season] ?? [1, 1, 1]
-        var kinds = weighted(Array(zip([1, 2, 3], weights)), &rng) + 1 + (cat.skills.tier(of: .SENSE) ?? 0)
-        let cleverness = 1 + Double(cat.skills.tier(of: .CLEVER) ?? 0)
+        var kinds = (weighted(Array(zip([1, 2, 3], weights)), &rng) + 1 + (cat.skills.tier(of: .SENSE) ?? 0)) * (bonus ? 2 : 1)
+        let cleverness = (1 + Double(cat.skills.tier(of: .CLEVER) ?? 0)) * (bonus ? 2 : 1)
         var remaining = limit
         var found: [String: Int] = [:]
         for name in herbsByNeed(in: clan) where kinds > 0 {

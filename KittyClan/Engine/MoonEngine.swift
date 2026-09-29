@@ -113,10 +113,14 @@ struct MoonEngine: Sendable {
             }
         }
         events += outsiderMoon(in: &clan, skipping: denTarget, using: &rng)
+        let lowOnPrey = clan.preyAndHerbs && Self.preyNeeded(in: clan) > clan.freshKill.total
+        var focusHerbLog: [String] = []
+        events.insert(contentsOf: focusMoon(in: &clan, herbLog: &focusHerbLog, using: &rng), at: 0)
         herbMoon(in: &clan, using: &rng)
+        clan.herbs.log.insert(contentsOf: focusHerbLog, at: 0)
         if clan.preyAndHerbs {
             updateNutrition(in: &clan)
-            if Self.preyNeeded(in: clan) > clan.freshKill.total { events.append(.lowPrey) }
+            if lowOnPrey { events.append(.lowPrey) }
         }
 
         for cat in clan.living where cat.rank.isApprentice && cat.mentor == nil {

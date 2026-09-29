@@ -182,7 +182,8 @@ extension MoonEngine {
                 break
             }
 
-            let healed = current.duration - current.moonsWith(clanAge: clan.age) <= 0 && (kind == .illness || current.complication == nil)
+            let early = clan.focus == .restAndRecover ? 1 : 0
+            let healed = current.duration - current.moonsWith(clanAge: clan.age) - early <= 0 && (kind == .illness || current.complication == nil)
             if healed {
                 skip.insert(current.name)
                 clan.cats[i].conditions.remove(at: c)
@@ -397,7 +398,7 @@ extension MoonEngine {
         let roll = Int.random(in: 0..<(clan.war.isGoingBadly ? 225 : 450), using: &rng)
         let risky = ConditionLibrary.riskyTraits.contains(cat.personality.trait)
         var counts: [UUID: Int] = [:]
-        guard roll <= (risky ? 15 : 5),
+        guard roll <= (risky ? 15 : 5), clan.focus != .restAndRecover || !oneIn(4, &rng),
               var pick = library.injuryEvent(for: cat, in: clan, context: eventContext(for: clan, using: &rng), using: &rng),
               addNewCats(to: &pick, in: &clan, counts: &counts, using: &rng) != nil
         else { return [] }
@@ -415,6 +416,7 @@ extension MoonEngine {
     /// Clangen's `handle_illnesses`: 11 in 500 each moon, picked by season.
     func rollIllness(for id: UUID, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [MoonEvent] {
         guard let library = conditions, let cat = clan[id], Int.random(in: 0..<500, using: &rng) <= 10,
+              clan.focus != .restAndRecover || !oneIn(6, &rng),
               let weights = library.seasons[clan.season.rawValue], !weights.isEmpty
         else { return [] }
         var name = weighted(weights.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }, &rng)
@@ -435,6 +437,7 @@ extension MoonEngine {
         for illness in cat.illnesses where illness.infectiousness != 0 {
             guard oneIn(illness.infectiousness + 10 * healers, &rng) else { continue }
             guard [.leafFall, .leafBare].contains(clan.season) || illness.name == "fleas" else { continue }
+            if clan.focus == .restAndRecover, oneIn(2, &rng) { continue }
             let pool = illness.name == "kittencough" ? healthy.filter { $0.rank.isBaby } : healthy
             var most = pool.count / 2
             if most < 2 { most = pool.count }

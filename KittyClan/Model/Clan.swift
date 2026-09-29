@@ -71,6 +71,11 @@ struct Clan: Codable, Sendable {
     var mediatedPairs: Set<CatPair> = []
     /// Clangen's `become_mediator` setting: warriors and elders may choose to become mediators.
     var becomeMediator = false
+    var focus = ClanFocus.businessAsUsual
+    /// Clan age when the focus last changed; nil if it never has.
+    var focusChangedAt: Int?
+    /// Other Clans targeted by sabotage, aid or raids.
+    var focusTargets: [UUID] = []
     /// How each cat feels about each other cat: `relationships[from][to]`.
     var relationships: [UUID: [UUID: Relationship]] = [:]
     var history: [MoonLog] = []
@@ -187,6 +192,9 @@ extension Clan {
         mediatedThisMoon = try c.decodeIfPresent(Set<UUID>.self, forKey: .mediatedThisMoon) ?? []
         mediatedPairs = try c.decodeIfPresent(Set<CatPair>.self, forKey: .mediatedPairs) ?? []
         becomeMediator = try c.decodeIfPresent(Bool.self, forKey: .becomeMediator) ?? false
+        focus = try c.decodeIfPresent(ClanFocus.self, forKey: .focus) ?? .businessAsUsual
+        focusChangedAt = try c.decodeIfPresent(Int.self, forKey: .focusChangedAt)
+        focusTargets = try c.decodeIfPresent([UUID].self, forKey: .focusTargets) ?? []
         relationships = try c.decodeIfPresent([UUID: [UUID: Relationship]].self, forKey: .relationships) ?? [:]
         history = try c.decodeIfPresent([MoonLog].self, forKey: .history) ?? []
         preyAndHerbs = try c.decodeIfPresent(Bool.self, forKey: .preyAndHerbs) ?? false
