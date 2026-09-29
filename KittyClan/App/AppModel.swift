@@ -346,7 +346,7 @@ final class AppModel {
     }
 
     /// Sets a Clan cat's gender identity and pronouns, then lets it think anew.
-    func setGender(_ id: Cat.ID, genderAlign: GenderAlign, pronouns: Pronouns) async {
+    func setGender(_ id: Cat.ID, genderAlign: GenderAlign, pronouns: [PronounSet]) async {
         guard let assets, var current = clan, !isAdvancing, current.setGender(id, genderAlign: genderAlign, pronouns: pronouns) else { return }
         var rng = SystemRandomNumberGenerator()
         assets.engine.refreshThought(for: id, in: &current, using: &rng)
@@ -354,13 +354,45 @@ final class AppModel {
         await save()
     }
 
-    /// A sample sentence using these pronouns for the cat.
-    func pronounPreview(of cat: Cat, pronouns: Pronouns) -> String {
+    /// Clangen's pronoun demo text using this set for the cat.
+    func pronounPreview(of cat: Cat, set: PronounSet) -> String {
         guard let assets, let clan else { return "" }
         var cat = cat
-        cat.pronouns = pronouns
+        cat.pronouns = [set]
+        let lines = [
+            "{PRONOUN/m_c/subject/CAP} {VERB/m_c/are/is} a {ADJ/m_c/cat/tom/she-cat}.",
+            "Everyone saw {PRONOUN/m_c/object}.",
+            "{PRONOUN/m_c/poss/CAP} paw slipped.",
+            "That den is {PRONOUN/m_c/inposs}.",
+            "m_c hunts by {PRONOUN/m_c/self}.",
+        ]
+        return assets.patrols.template.resolve(lines.joined(separator: "\n"), cats: ["m_c": cat], clan: clan)
+    }
+
+    /// A short sentence using this set for the cat.
+    func pronounSample(of cat: Cat, set: PronounSet) -> String {
+        guard let assets, let clan else { return "" }
+        var cat = cat
+        cat.pronouns = [set]
         let line = "{PRONOUN/m_c/subject/CAP} {VERB/m_c/are/is} proud of {PRONOUN/m_c/self}, and the Clan is proud of {PRONOUN/m_c/object} too."
         return assets.patrols.template.resolve(line, cats: ["m_c": cat], clan: clan)
+    }
+
+    /// Saves a new pronoun set for the whole Clan. Returns false if it's incomplete or already exists.
+    @discardableResult
+    func addCustomPronouns(_ set: PronounSet) async -> Bool {
+        guard var current = clan, !isAdvancing, current.addCustomPronouns(set) else { return false }
+        clan = current
+        await save()
+        return true
+    }
+
+    /// Removes a custom set from the Clan's presets; cats already using it keep it.
+    func removeCustomPronouns(_ set: PronounSet) async {
+        guard var current = clan, !isAdvancing, let i = current.customPronouns.firstIndex(of: set) else { return }
+        current.customPronouns.remove(at: i)
+        clan = current
+        await save()
     }
 
     /// The cat's current thought, e.g. "Is watching over the kits".

@@ -15,6 +15,8 @@ struct PatrolSession: Sendable {
     let fail: (outcome: PatrolOutcome, cats: [String: [UUID]])
     let antagSuccess: (outcome: PatrolOutcome, cats: [String: [UUID]])?
     let antagFail: (outcome: PatrolOutcome, cats: [String: [UUID]])?
+    /// The point of interest the patrol visits (`POI`), when the patrol names one.
+    var poi: String?
 
     var canAntagonize: Bool { antagSuccess != nil && antagFail != nil }
 }
@@ -77,6 +79,7 @@ struct PatrolEngine: Sendable {
         }
 
         if clan.otherClans.isEmpty { clan.otherClans = engine.generateOtherClans(for: clan, using: &rng) }
+        clan.ensurePointsOfInterest(library.places, using: &rng)
         let otherClan = clan.otherClans.randomElement(using: &rng)
         var candidates = library.patrols(for: type, season: clan.season, biome: clan.biome, camp: clan.camp)
         if type == .hunting { candidates = balanceHunting(candidates, clan: clan, using: &rng) }
@@ -107,11 +110,12 @@ struct PatrolEngine: Sendable {
 
         clan.patrolledThisMoon.formUnion(catIDs)
         let art = library.artURL(patrol.art) != nil ? patrol.art : PatrolLibrary.introArt(for: type)
+        let poi = patrol.poi.flatMap { library.places?.choose($0, in: clan, using: &rng) }
         return PatrolSession(
             type: type, cats: catIDs, otherClan: otherClan?.id, patrol: patrol, involved: involved,
-            intro: resolve(introText, involved, clan: clan, otherClan: otherClan?.id, using: &rng), introArt: art,
+            intro: resolve(introText, involved, clan: clan, otherClan: otherClan?.id, poi: poi, using: &rng), introArt: art,
             success: success, fail: fail,
-            antagSuccess: antagSuccess, antagFail: antagFail
+            antagSuccess: antagSuccess, antagFail: antagFail, poi: poi
         )
     }
 
@@ -183,7 +187,9 @@ struct PatrolEngine: Sendable {
 
     private func choose(_ patrols: [PatrolEvent], involved: [String: [UUID]], otherClan: UUID?, clan: Clan, using rng: inout some RandomNumberGenerator) -> (PatrolEvent, [String: [UUID]])? {
         pickByFrequency(patrols, frequency: \.frequency, weight: \.weight, using: &rng) { patrol, rng in
-            guard generalConstraints(season: patrol.season, required: patrol.requiredCatTypes, tags: patrol.tags, involved: involved, clan: clan) else { return nil }
+            guard generalConstraints(season: patrol.season, required: patrol.requiredCatTypes, tags: patrol.tags, involved: involved, clan: clan),
+                  library.places?.allows(patrol.poi, in: clan) ?? (patrol.poi == nil)
+            else { return nil }
             return fill(patrol.slots, rules: patrol.rules, involved: involved, otherClan: otherClan, clan: clan, using: &rng).map { (patrol, $0) }
         }
     }
@@ -191,7 +197,9 @@ struct PatrolEngine: Sendable {
     private func chooseOutcome(_ outcomes: [PatrolOutcome], involved: [String: [UUID]], otherClan: UUID?, clan: Clan, using rng: inout some RandomNumberGenerator) -> (outcome: PatrolOutcome, cats: [String: [UUID]])? {
         guard !outcomes.isEmpty else { return nil }
         return pickByFrequency(outcomes, frequency: \.frequency, weight: \.weight, using: &rng) { outcome, rng in
-            guard generalConstraints(season: outcome.season, required: outcome.requiredCatTypes, tags: outcome.tags, involved: involved, clan: clan) else { return nil }
+            guard generalConstraints(season: outcome.season, required: outcome.requiredCatTypes, tags: outcome.tags, involved: involved, clan: clan),
+                  library.places?.allows(outcome.poi, in: clan) ?? (outcome.poi == nil)
+            else { return nil }
             return fill(outcome.slots, rules: outcome.rules, involved: involved, otherClan: otherClan, clan: clan, using: &rng).map { (outcome, $0) }
         }
     }
@@ -315,7 +323,7 @@ struct PatrolEngine: Sendable {
             if spec.litter {
                 let moons = age == .newborn ? 0 : age == .kitten ? Int.random(in: 1...5, using: &rng) : Int.random(in: 0...5, using: &rng)
                 for _ in 0..<Int.random(in: 2...6, using: &rng) {
-                    var kit = engine.factory.make(rank: moons == 0 ? .newborn : .kitten, moons: moons, origin: origin, using: &rng)
+                    var kit = engine.factory.make(rank: moons == 0 ? .newborn : .kitten, moons: moons, origin: origin, theyThem: clan.theyThemDefault, using: &rng)
                     engine.factory.maybeCollar(&kit, using: &rng)
                     made.append(kit)
                 }
@@ -325,9 +333,9 @@ struct PatrolEngine: Sendable {
                 let moons = Int.random(in: min(age.moons.lowerBound, 300)...min(age.moons.upperBound, 300), using: &rng)
                 var cat: Cat
                 if social == .clancat {
-                    cat = engine.factory.make(rank: MoonEngine.rankForAge(age), moons: moons, origin: origin, sex: sex, using: &rng)
+                    cat = engine.factory.make(rank: MoonEngine.rankForAge(age), moons: moons, origin: origin, sex: sex, theyThem: clan.theyThemDefault, using: &rng)
                 } else {
-                    cat = engine.factory.makeJoiner(origin: origin, sex: sex, using: &rng)
+                    cat = engine.factory.makeJoiner(origin: origin, sex: sex, theyThem: clan.theyThemDefault, using: &rng)
                     cat.moons = moons
                 }
                 if let (path, tier) = spec.skills.randomElement(using: &rng).flatMap(CatSkills.requirement) {
@@ -382,7 +390,7 @@ struct PatrolEngine: Sendable {
     func finish(_ session: PatrolSession, choice: PatrolChoice, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> PatrolResult {
         if choice == .decline {
             let text = session.patrol.decline.randomElement(using: &rng) ?? "The patrol turns back."
-            return PatrolResult(text: resolve(text, session.involved, clan: clan, otherClan: session.otherClan, using: &rng), results: [], art: nil, succeeded: false)
+            return PatrolResult(text: resolve(text, session.involved, clan: clan, otherClan: session.otherClan, poi: session.poi, using: &rng), results: [], art: nil, succeeded: false)
         }
 
         let antagonize = choice == .antagonize && session.canAntagonize
@@ -393,7 +401,8 @@ struct PatrolEngine: Sendable {
 
         var cats = session.involved.merging(outcomeCats) { _, new in new }
         cats = createCats(for: outcome.slots, involved: cats, otherClan: session.otherClan, in: &clan, using: &rng)
-        let text = resolve(outcome.strings.randomElement(using: &rng) ?? "", cats, clan: clan, otherClan: session.otherClan, using: &rng)
+        let poi = session.poi ?? outcome.poi.flatMap { library.places?.choose($0, in: clan, using: &rng) }
+        let text = resolve(outcome.strings.randomElement(using: &rng) ?? "", cats, clan: clan, otherClan: session.otherClan, poi: poi, using: &rng)
 
         var results: [String] = []
         results += join(outcome, cats: cats, in: &clan, using: &rng)
@@ -421,7 +430,8 @@ struct PatrolEngine: Sendable {
         if clan.history.isEmpty { clan.history.append(MoonLog(moon: clan.age, entries: [])) }
         clan.history[clan.history.count - 1].entries.append(entry)
 
-        let art = library.artURL(outcome.art) != nil ? outcome.art : nil
+        let outcomeArt = outcome.art == "POI" ? poi.map { "backgrounds/poi_\($0)" } : outcome.art
+        let art = library.artURL(outcomeArt) != nil ? outcomeArt : nil
         return PatrolResult(text: text, results: results, art: art, succeeded: succeeded)
     }
 
@@ -647,7 +657,9 @@ struct PatrolEngine: Sendable {
         abbr == "p_l" || (abbr.count == 4 && ["r_c", "s_c", "n_c"].contains(String(abbr.prefix(3))) && abbr.last!.isNumber)
     }
 
-    private func resolve(_ text: String, _ involved: [String: [UUID]], clan: Clan, otherClan: UUID?, using rng: inout some RandomNumberGenerator) -> String {
+    private func resolve(_ text: String, _ involved: [String: [UUID]], clan: Clan, otherClan: UUID?, poi: String?, using rng: inout some RandomNumberGenerator) -> String {
+        var text = text
+        if let poi, let places = library.places { text = text.replacingOccurrences(of: "POI", with: places.name(poi)) }
         var cats: [String: Cat] = [:]
         for (abbr, ids) in involved where ids.count == 1 && Self.isRole(abbr) {
             if let cat = clan[ids[0]] { cats[abbr] = cat }
@@ -656,6 +668,6 @@ struct PatrolEngine: Sendable {
         for (abbr, options) in library.prey where text.contains(abbr) {
             extras[abbr] = options.randomElement(using: &rng)
         }
-        return template.resolve(text, cats: cats, clan: clan, otherClan: clan.otherClan(otherClan)?.name, extras: extras)
+        return template.resolve(text, cats: cats, clan: clan, otherClan: clan.otherClan(otherClan)?.name, extras: extras, using: &rng)
     }
 }

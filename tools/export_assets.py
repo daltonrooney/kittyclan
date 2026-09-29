@@ -202,6 +202,9 @@ def export_text():
         "misc": [lang / "events" / "misc" / f"{name}.json" for name in ["general"] + BIOMES],
         "": [
             lang / "pronouns.en.json",
+            lang / "snippet_collections.json",
+            lang / "points_of_interest.en.json",
+            CLANGEN / "resources" / "dicts" / "points_of_interest.json",
             lang / "conditions" / "pregnancy.json",
             lang / "conditions" / "pregnancy.en.json",
             CLANGEN / "resources" / "dicts" / "traits" / "trait_ranges.json",
@@ -236,6 +239,7 @@ def export_text():
     ]
     events = lang / "events"
     files["war"] = [events / "war.json"]
+    files["transition"] = [events / "transition.json"]
     files["leader_den/success"] = sorted((events / "leader_den" / "success").glob("*.json"))
     files["leader_den/fail"] = sorted((events / "leader_den" / "fail").glob("*.json"))
     files["new_cat"] = [events / "new_cat" / f"{name}.json" for name in ["general"] + BIOMES]
@@ -306,6 +310,7 @@ def export_patrol_art(patrol_files):
     available = {str(path.relative_to(art)).lower()[:-4]: path for path in art.rglob("*") if path.suffix.lower() == ".png"}
 
     wanted = {"hunt_general_intro", "bord_general_intro", "train_general_intro", "med_general_intro"}
+    wanted.update(name for name in available if name.startswith("backgrounds/poi_"))
     def collect(node):
         if isinstance(node, dict):
             for key, value in node.items():

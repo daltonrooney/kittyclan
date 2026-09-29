@@ -33,6 +33,7 @@ struct MoonEngine: Sendable {
         for i in clan.cats.indices { clan.cats[i].nextThought = nil }
         for i in clan.outsiders.indices { clan.outsiders[i].nextThought = nil }
         if clan.otherClans.isEmpty { clan.otherClans = generateOtherClans(for: clan, using: &rng) }
+        clan.ensurePointsOfInterest(library?.places, using: &rng)
         events += checkWar(in: &clan, using: &rng)
         let denTarget: UUID? = if case .outsider(let id)? = clan.outsiderDenPlan?.target { id } else { nil }
         events += resolveLeaderDen(in: &clan, using: &rng)
@@ -72,6 +73,7 @@ struct MoonEngine: Sendable {
                 events += progressDisabilities(for: id, skip: &skip, in: &clan, using: &rng)
                 guard clan.isAlive(id) else { continue }
             }
+            events += attemptComingOut(id, in: &clan, using: &rng)
             events += pregnancy(for: id, in: &clan, using: &rng)
             guard clan.isAlive(id) else { continue }
             if let relationships {
@@ -368,7 +370,7 @@ struct MoonEngine: Sendable {
             var kits: [Cat] = []
             var usedPrefixes = Set<String>()
             for _ in 0..<record.litterSize {
-                var kit = factory.makeKit(mother: mother, father: father, using: &rng)
+                var kit = factory.makeKit(mother: mother, father: father, theyThem: clan.theyThemDefault, using: &rng)
                 for _ in 0..<10 where usedPrefixes.contains(kit.name.prefix) {
                     kit.name = factory.names.generate(for: kit.appearance, using: &rng)
                 }
@@ -435,7 +437,7 @@ struct MoonEngine: Sendable {
         let count = max(1, weighted(Array(zip(1...6, weights)), &rng))
 
         let social: Cat.Origin = pick([.loner, .kittypet], &rng)
-        var birthParent = factory.make(rank: .warrior, moons: Int.random(in: 15...120, using: &rng), origin: social, using: &rng)
+        var birthParent = factory.make(rank: .warrior, moons: Int.random(in: 15...120, using: &rng), origin: social, theyThem: clan.theyThemDefault, using: &rng)
         birthParent.name = factory.names.outsiderName(for: social, using: &rng)
         clan.outsiders.append(birthParent)
         clan.sendToAfterlife(birthParent.id, history: nil, using: &rng)
@@ -446,7 +448,7 @@ struct MoonEngine: Sendable {
         var kits: [Cat] = []
         var usedPrefixes = Set<String>()
         for _ in 0..<count {
-            var kit = factory.make(rank: .newborn, moons: 0, origin: .clanborn, using: &rng)
+            var kit = factory.make(rank: .newborn, moons: 0, origin: .clanborn, theyThem: clan.theyThemDefault, using: &rng)
             for _ in 0..<10 where usedPrefixes.contains(kit.name.prefix) {
                 kit.name = factory.names.generate(for: kit.appearance, using: &rng)
             }
@@ -505,7 +507,7 @@ struct MoonEngine: Sendable {
             let count = weighted([(2, 5), (3, 4), (4, 1), (5, 1)], &rng)
             let moons = Int.random(in: 1...5, using: &rng)
             let kits = (0..<count).map { _ in
-                var kit = factory.make(rank: .kitten, moons: moons, origin: .loner, using: &rng)
+                var kit = factory.make(rank: .kitten, moons: moons, origin: .loner, theyThem: clan.theyThemDefault, using: &rng)
                 kit.backstory = Backstories.bundled.random(from: "abandoned_backstories", using: &rng)
                 return kit
             }
@@ -514,7 +516,7 @@ struct MoonEngine: Sendable {
             return [.litterFound(kits.map(\.id), foundBy: id)]
         }
         let origin: Cat.Origin = kind == "kittypet" ? .kittypet : kind == "rogue" ? .rogue : .loner
-        let joiner = factory.makeJoiner(origin: origin, using: &rng)
+        let joiner = factory.makeJoiner(origin: origin, theyThem: clan.theyThemDefault, using: &rng)
         clan.cats.append(joiner)
         rollCongenital(for: joiner.id, odds: 100, in: &clan, using: &rng)
         return [.joined(joiner.id, foundBy: id)]

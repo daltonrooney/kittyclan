@@ -340,7 +340,7 @@ extension MoonEngine {
             case .clancat: group == nil ? .loner : .clanborn
             default: social.origin ?? .loner
             }
-            var cat = factory.make(rank: finalRank, moons: litterMoons ?? moons, origin: origin, sex: sex, using: &rng)
+            var cat = factory.make(rank: finalRank, moons: litterMoons ?? moons, origin: origin, sex: sex, theyThem: clan.theyThemDefault, using: &rng)
             cat.backstory = backstory
             cat.otherClan = group
             cat.leftOtherClan = group != nil && (joins || social != .clancat)

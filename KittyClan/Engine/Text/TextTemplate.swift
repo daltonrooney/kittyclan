@@ -1,52 +1,27 @@
 import Foundation
 
-/// Clangen's pronoun sets from `pronouns.en.json`.
-struct PronounTable: Sendable {
-    struct Set: Decodable, Sendable {
-        let subject: String
-        let object: String
-        let poss: String
-        let inposs: String
-        let reflexive: String
-        let conju: Int
-        let gender: Int
-
-        private enum CodingKeys: String, CodingKey {
-            case subject, object, poss, inposs, conju, gender
-            case reflexive = "self"
-        }
-
-        subscript(field: String) -> String? {
-            switch field {
-            case "subject": subject
-            case "object": object
-            case "poss": poss
-            case "inposs": inposs
-            case "self": reflexive
-            default: nil
-            }
-        }
-    }
-
-    let sets: [String: Set]
-
-    init(url: URL) throws {
-        sets = try JSONDecoder().decode([String: Set].self, from: Data(contentsOf: url))
-    }
-
-    subscript(pronouns: Pronouns) -> Set? { sets[pronouns.rawValue] }
-}
-
-/// Fills in Clangen event text (`text_adjust.event_text_adjust`): pronoun, verb and adjective
-/// tags, then cat abbreviations such as `m_c` and `r_c0`, then the Clan name.
+/// Fills in Clangen event text (`text_adjust.event_text_adjust`): a special snippet list, pronoun,
+/// verb and adjective tags, then cat abbreviations such as `m_c` and `r_c0`, then the Clan name.
 struct TextTemplate: Sendable {
-    let pronouns: PronounTable
     let names: NameGenerator
+    var snippets: SnippetCollections?
+
+    /// Resolves the same way every time for the same text and cats, so text shown again and again,
+    /// like a thought, doesn't change which pronoun set it uses.
+    func resolve(_ text: String, cats: [String: Cat], clan: Clan, otherClan: String? = nil, extras: [String: String] = [:]) -> String {
+        var rng = StableRandom(text + cats.values.map(\.id.uuidString).sorted().joined())
+        return resolve(text, cats: cats, clan: clan, otherClan: otherClan, extras: extras, using: &rng)
+    }
 
     /// - Parameters:
     ///   - cats: abbreviation → cat, e.g. `["m_c": leader, "r_c": mentor]`.
     ///   - extras: other literal replacements, e.g. `["r_h": "bravery", "(old_name)": "Firepaw"]`.
-    func resolve(_ text: String, cats: [String: Cat], clan: Clan, otherClan: String? = nil, extras: [String: String] = [:]) -> String {
+    ///   - rng: picks the snippets and, once per cat, one of its pronoun sets for the whole text.
+    func resolve(
+        _ text: String, cats: [String: Cat], clan: Clan, otherClan: String? = nil, extras: [String: String] = [:],
+        using rng: inout some RandomNumberGenerator
+    ) -> String {
+        let given = cats
         var cats = cats
         for (abbr, id) in [("lead_name", clan.leader), ("dep_name", clan.deputy)] {
             if let cat = clan[id], cat.isAlive { cats[abbr] = cat }
@@ -57,7 +32,13 @@ struct TextTemplate: Sendable {
         var replacements = extras
         for (abbr, cat) in cats { replacements[abbr] = names.display(cat.name, rank: cat.rank) }
 
-        var output = resolveTags(text, cats: cats)
+        let text = snippets?.expand(text, biome: clan.biome, using: &rng) ?? text
+        var sets: [UUID: PronounSet] = [:]
+        for abbr in given.keys.sorted() + cats.keys.filter({ given[$0] == nil }).sorted() {
+            guard let cat = cats[abbr], sets[cat.id] == nil else { continue }
+            sets[cat.id] = cat.pronouns.randomElement(using: &rng) ?? .they
+        }
+        var output = resolveTags(text, sets: cats.compactMapValues { sets[$0.id] })
         if let otherClan { output = replaceClanName(output, otherClan, token: "o_c_n") }
         output = replaceAbbreviations(output, replacements)
         return replaceClanName(output, clan.displayName, token: "c_n")
@@ -79,7 +60,7 @@ struct TextTemplate: Sendable {
 
     /// Resolves `{PRONOUN/abbr/field}`, `{VERB/abbr/plural/singular}` and `{ADJ/abbr/they/he/she}`,
     /// with an optional trailing `/CAP`. Tags for cats not in this event are left for later.
-    private func resolveTags(_ text: String, cats: [String: Cat]) -> String {
+    private func resolveTags(_ text: String, sets: [String: PronounSet]) -> String {
         var output = ""
         var rest = Substring(text)
         while let open = rest.firstIndex(of: "{") {
@@ -90,15 +71,15 @@ struct TextTemplate: Sendable {
                 return output
             }
             let tag = rest[rest.index(after: open)..<close]
-            output += percent ? String(rest[open...close]) : (resolveTag(String(tag), cats: cats) ?? String(rest[open...close]))
+            output += percent ? String(rest[open...close]) : (resolveTag(String(tag), sets: sets) ?? String(rest[open...close]))
             rest = rest[rest.index(after: close)...]
         }
         return output + rest
     }
 
-    private func resolveTag(_ tag: String, cats: [String: Cat]) -> String? {
+    private func resolveTag(_ tag: String, sets: [String: PronounSet]) -> String? {
         var parts = tag.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
-        guard parts.count >= 3, let cat = cats[parts[1]], let set = pronouns[cat.pronouns] else { return nil }
+        guard parts.count >= 3, let set = sets[parts[1]] else { return nil }
         let capitalize = parts.last == "CAP"
         if capitalize { parts.removeLast() }
 
@@ -146,5 +127,27 @@ struct TextTemplate: Sendable {
             else if parts[i].hasSuffix(" A ") || parts[i] == "A " { parts[i] = String(parts[i].dropLast(2)) + "An " }
         }
         return parts.joined(separator: clanName)
+    }
+}
+
+/// A generator seeded from a string (FNV-1a, then SplitMix64), so the same string gives the same picks.
+struct StableRandom: RandomNumberGenerator {
+    private var state: UInt64
+
+    init(_ seed: String) {
+        var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+        for byte in seed.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 0x0000_0100_0000_01B3
+        }
+        state = hash
+    }
+
+    mutating func next() -> UInt64 {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
     }
 }
