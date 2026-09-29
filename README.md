@@ -2,6 +2,16 @@
 
 A native iPad game about raising a Clan of forest cats, built in Swift and SwiftUI. KittyClan is a from-scratch port of [ClanGen](https://github.com/ClanGenOfficial/clangen). It reproduces ClanGen's simulation, events and pixel-art cats as closely as possible, and adds a touch interface.
 
+<p align="center">
+  <img src="docs/screenshots/camp.jpg" width="32%" alt="A forest camp at moon 60, with cats around the dens and the moon log below">
+  <img src="docs/screenshots/profile.jpg" width="32%" alt="A cat's profile: pixel sprite on a grass platform, her current thought, how she looked at each age, and her details">
+  <img src="docs/screenshots/starclan.jpg" width="32%" alt="StarClan: ghostly cats of the Clan's dead with the guiding ghost first">
+</p>
+<p align="center">
+  <img src="docs/screenshots/biome.jpg" width="32%" alt="Founding: choosing between forest, mountains, plains and beach, each with four camps">
+  <img src="docs/screenshots/chooser.jpg" width="32%" alt="The Clan chooser with three saved Clans, their symbols, moons and territories">
+</p>
+
 ## What's in the game
 
 - **Founding:** choose the leader, deputy, medicine cat and members from generated cats, then pick a biome (forest, mountains, plains or beach), a camp and a Clan symbol.
