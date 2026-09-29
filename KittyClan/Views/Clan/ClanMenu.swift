@@ -7,6 +7,7 @@ struct ClanMenu: View {
     var body: some View {
         Menu("Clan options", systemImage: "ellipsis.circle") {
             Toggle("Dead cats fade", systemImage: "aqi.low", isOn: fading)
+            Toggle("Same-sex mates adopt kits", systemImage: "figure.and.child.holdinghands", isOn: sameSexAdoption)
             Divider()
             Button("About KittyClan", systemImage: "info.circle", action: showAbout)
             Button("Start a new Clan", systemImage: "arrow.counterclockwise", role: .destructive, action: confirmNewClan)
@@ -23,6 +24,14 @@ struct ClanMenu: View {
             model.clan?.fading ?? true
         } set: { fading in
             Task { await model.setFading(fading) }
+        }
+    }
+
+    private var sameSexAdoption: Binding<Bool> {
+        Binding {
+            model.clan?.sameSexAdoption ?? false
+        } set: { on in
+            Task { await model.setSameSexAdoption(on) }
         }
     }
 

@@ -1,10 +1,10 @@
 import Foundation
 
-/// Clangen's family tree relations, computed from blood parents.
+/// Clangen's family tree relations. Adoptive parents count as parents, as in Clangen.
 struct Kin: Hashable, Sendable {
     enum Kind: String, Sendable {
-        case parent, grandparent, mate, formerMate, kit, grandkit
-        case sibling, halfSibling, littermate, siblingsKit, auntOrUncle, cousin
+        case parent, adoptiveParent, grandparent, mate, formerMate, kit, adoptiveKit, grandkit
+        case sibling, halfSibling, littermate, adoptiveSibling, siblingsKit, auntOrUncle, cousin
     }
 
     let id: UUID
@@ -15,10 +15,22 @@ extension Clan {
     /// Every cat the Clan knows of, living or dead, in the Clan or outside it.
     private var everyone: [Cat] { cats + outsiders }
 
-    func parents(of id: UUID) -> [UUID] { self[id]?.parents ?? [] }
+    /// Blood parents first, then adoptive ones.
+    func parents(of id: UUID) -> [UUID] { self[id]?.allParents ?? [] }
+    func bloodParents(of id: UUID) -> [UUID] { self[id]?.parents ?? [] }
+    func adoptiveParents(of id: UUID) -> [UUID] { self[id]?.adoptiveParents ?? [] }
 
+    /// Blood and adopted kits.
     func children(of id: UUID) -> [UUID] {
+        everyone.filter { $0.parents.contains(id) || $0.adoptiveParents.contains(id) }.map(\.id)
+    }
+
+    func bloodChildren(of id: UUID) -> [UUID] {
         everyone.filter { $0.parents.contains(id) }.map(\.id)
+    }
+
+    func adoptedKits(of id: UUID) -> [UUID] {
+        everyone.filter { $0.adoptiveParents.contains(id) && !$0.parents.contains(id) }.map(\.id)
     }
 
     func grandparents(of id: UUID) -> [UUID] {
@@ -30,15 +42,17 @@ extension Clan {
         unique(children(of: id).flatMap { children(of: $0) })
     }
 
-    /// Clangen's sibling types: sharing every parent is a full sibling, sharing only some a
-    /// half sibling; full siblings born the same moon are littermates.
+    /// Clangen's sibling types: any shared parent makes a sibling. Sharing every blood parent
+    /// is a full sibling, sharing only some a half sibling, and sharing none an adoptive
+    /// sibling; full siblings born the same moon are littermates.
     func siblings(of id: UUID) -> [Kin] {
-        guard let cat = self[id], !cat.parents.isEmpty else { return [] }
-        let mine = Set(cat.parents)
+        guard let cat = self[id], !cat.allParents.isEmpty else { return [] }
+        let mineAll = Set(cat.allParents), mineBlood = Set(cat.parents)
         return everyone.compactMap { other in
-            let theirs = Set(other.parents)
-            guard other.id != id, !mine.isDisjoint(with: theirs), !mine.contains(other.id) else { return nil }
-            if mine != theirs { return Kin(id: other.id, kind: .halfSibling) }
+            guard other.id != id, !mineAll.contains(other.id), !mineAll.isDisjoint(with: other.allParents) else { return nil }
+            let theirsBlood = Set(other.parents)
+            if mineBlood.isDisjoint(with: theirsBlood) { return Kin(id: other.id, kind: .adoptiveSibling) }
+            if mineBlood != theirsBlood { return Kin(id: other.id, kind: .halfSibling) }
             let born = { (c: Cat) in c.moons + c.deadFor }
             return Kin(id: other.id, kind: born(other) == born(cat) ? .littermate : .sibling)
         }
@@ -47,7 +61,7 @@ extension Clan {
     func auntsAndUncles(of id: UUID) -> [UUID] {
         let parents = Set(parents(of: id))
         let grandparents = Set(grandparents(of: id))
-        return everyone.filter { !parents.contains($0.id) && !grandparents.isDisjoint(with: $0.parents) }.map(\.id)
+        return everyone.filter { !parents.contains($0.id) && !grandparents.isDisjoint(with: $0.allParents) }.map(\.id)
     }
 
     func cousins(of id: UUID) -> [UUID] {
@@ -68,8 +82,10 @@ extension Clan {
             }
         }
         add(cat.parents, .parent)
+        add(cat.adoptiveParents, .adoptiveParent)
         add(cat.mates, .mate)
-        add(children(of: id), .kit)
+        add(bloodChildren(of: id), .kit)
+        add(adoptedKits(of: id), .adoptiveKit)
         for sibling in siblings(of: id) { add([sibling.id], sibling.kind) }
         add(grandparents(of: id), .grandparent)
         add(grandkits(of: id), .grandkit)

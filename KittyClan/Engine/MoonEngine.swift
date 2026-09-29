@@ -334,7 +334,8 @@ struct MoonEngine: Sendable {
                 kits.append(kit)
             }
             clan.cats += kits
-            relationships?.initializeKits(kits.map(\.id), parents: [id, father.id], in: &clan, using: &rng)
+            let adoptive = mother.mates.contains(father.id) ? polyParents(for: kits, of: mother, father, in: &clan) : []
+            relationships?.initializeKits(kits.map(\.id), parents: [id, father.id] + adoptive, in: &clan, using: &rng)
             for kit in kits { rollCongenital(for: kit.id, in: &clan, using: &rng) }
             clan.cats[i].nextThought = .onBirth
             if let f = clan.index(of: father.id), clan.cats[f].isAlive { clan.cats[f].nextThought = .onBirth }
@@ -351,6 +352,11 @@ struct MoonEngine: Sendable {
         let cat = clan.cats[i]
         guard canHaveKits(cat, in: clan) else { return [] }
         let partners = cat.mates.compactMap { clan[$0] }.filter { $0.sex != cat.sex && canHaveKits($0, in: clan, working: false) }
+        if partners.isEmpty, clan.sameSexAdoption {
+            let sameSex = cat.mates.compactMap { clan[$0] }.filter { $0.sex == cat.sex && canHaveKits($0, in: clan, working: false) }
+            guard let partner = sameSex.randomElement(using: &rng), oneIn(kitChance(cat, partner, in: clan), &rng) else { return [] }
+            return adoptLitter(by: id, with: partner.id, in: &clan, using: &rng)
+        }
         guard let partner = partners.randomElement(using: &rng),
               oneIn(kitChance(cat, partner, in: clan), &rng)
         else { return [] }
@@ -358,6 +364,63 @@ struct MoonEngine: Sendable {
         let (mother, father) = cat.sex == .female ? (cat.id, partner.id) : (partner.id, cat.id)
         clan.pregnancies[mother] = Pregnancy(otherParent: father)
         return [.expecting(mother: mother)]
+    }
+
+    /// Clangen's poly parenting: the parents' other living mates adopt the litter, unless
+    /// they're already the kits' relatives.
+    func polyParents(for kits: [Cat], of mother: Cat, _ father: Cat, in clan: inout Clan) -> [UUID] {
+        guard let first = kits.first else { return [] }
+        let others = (mother.mates + father.mates).filter { ![mother.id, father.id].contains($0) && clan.isAlive($0) }
+        var adoptive: [UUID] = []
+        let relatives = clan.relatives(of: first.id)
+        for mate in others where !adoptive.contains(mate) {
+            if let m = clan.index(of: mate) { clan.cats[m].nextThought = .onBirth }
+            if !relatives.contains(mate) { adoptive.append(mate) }
+        }
+        for kit in kits {
+            if let k = clan.index(of: kit.id) { clan.cats[k].adoptiveParents = adoptive }
+        }
+        return adoptive
+    }
+
+    /// Clangen's `handle_adoption`: a pair who can't have kits together finds an abandoned
+    /// litter. The kits' blood parent is a dead loner or kittypet; the pair and all their
+    /// living mates adopt them.
+    func adoptLitter(by id: UUID, with partner: UUID, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [MoonEvent] {
+        guard let i = clan.index(of: id), let other = clan[partner] else { return [] }
+        let cat = clan.cats[i]
+        let weights = Self.litterWeights[cat.age] ?? Self.litterWeights[.adult]!
+        let count = max(1, weighted(Array(zip(1...6, weights)), &rng))
+
+        let social: Cat.Origin = pick([.loner, .kittypet], &rng)
+        var birthParent = factory.make(rank: .warrior, moons: Int.random(in: 15...120, using: &rng), origin: social, using: &rng)
+        birthParent.name = factory.names.outsiderName(for: social, using: &rng)
+        clan.outsiders.append(birthParent)
+        clan.sendToAfterlife(birthParent.id, history: nil, using: &rng)
+
+        var adoptive = [id, partner]
+        for mate in cat.mates + other.mates where clan.isAlive(mate) && !adoptive.contains(mate) { adoptive.append(mate) }
+
+        var kits: [Cat] = []
+        var usedPrefixes = Set<String>()
+        for _ in 0..<count {
+            var kit = factory.make(rank: .newborn, moons: 0, origin: .clanborn, using: &rng)
+            for _ in 0..<10 where usedPrefixes.contains(kit.name.prefix) {
+                kit.name = factory.names.generate(for: kit.appearance, using: &rng)
+            }
+            usedPrefixes.insert(kit.name.prefix)
+            kit.parents = [birthParent.id]
+            kit.adoptiveParents = adoptive
+            kit.backstory = "abandoned\(Int.random(in: 1...4, using: &rng))"
+            kits.append(kit)
+        }
+        clan.cats += kits
+        relationships?.initializeKits(kits.map(\.id), parents: adoptive, in: &clan, using: &rng)
+        for kit in kits { rollCongenital(for: kit.id, in: &clan, using: &rng) }
+        clan.cats[i].birthCooldown = 6
+        clan.cats[i].nextThought = .onBirth
+        if let p = clan.index(of: partner) { clan.cats[p].nextThought = .onBirth }
+        return [.adopted(parents: [id, partner], kits: kits.map(\.id))]
     }
 
     /// Clangen's `get_balanced_kit_chance` for a mated pair, as a 1-in-N chance. Both mates roll each moon.

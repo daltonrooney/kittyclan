@@ -97,6 +97,8 @@ struct CatDetailView: View {
         case .role: RoleSheet(cat: cat) { wantsCeremony = true }
         case .mentor: MentorSheet(cat: cat)
         case .mate: MateSheet(cat: cat)
+        case .adoptiveParents: AdoptiveParentSheet(cat: cat)
+        case .gender: GenderSheet(cat: cat)
         case .rename: RenameSheet(cat: cat)
         }
     }
@@ -113,7 +115,7 @@ struct CatDetailView: View {
     @MainActor private static var didApplyDebugArguments = false
 
     /// `-detailSection afterlife|history|ceremony|actions|family|relationships|lifeStory|exile` scrolls the detail sheet for screenshots;
-    /// `-sheet role|mentor|mate|rename|family` opens a control once.
+    /// `-sheet role|mentor|mate|adopt|gender|rename|family` opens a control once.
     private func applyDebugArguments(_ proxy: ScrollViewProxy) {
         let defaults = UserDefaults.standard
         if let name = defaults.string(forKey: "detailSection"), let section = DetailSection(rawValue: name) {

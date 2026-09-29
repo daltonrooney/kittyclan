@@ -100,6 +100,7 @@ struct Constraint: Sendable {
 
     private static let flagTags: Set<String> = [
         "classic", "no_body", "all_lives", "some_lives", "lives_remain", "high_lives", "mid_lives", "low_lives", "romance",
+        "adoption",
     ]
     private static let blockedTokens = [
         "POI", "mur_c", "acc_", "_list", "multi_cat", "given_herb", "n_c", "r_c0", "r_c1", "r_c2", "r_c3",
@@ -126,7 +127,7 @@ struct Constraint: Sendable {
         return true
     }
 
-    /// Clangen's `clan:<rank>[(min:N)]` tags and leader-lives tags.
+    /// Clangen's `clan:<rank>[(min:N)]` tags, leader-lives tags and the `adoption` tag.
     static func tagsAllow(_ tags: [String], in clan: Clan, cat: Cat) -> Bool {
         let isLeader = cat.id == clan.leader
         let lives = clan.leaderLives
@@ -157,6 +158,7 @@ struct Constraint: Sendable {
             case "high_lives": if !isLeader || !(7...9).contains(lives) { return false }
             case "mid_lives": if !isLeader || !(4...6).contains(lives) { return false }
             case "low_lives": if !isLeader || !(1...3).contains(lives) { return false }
+            case "adoption": if cat.moons <= 14 + 5 { return false }
             default: break
             }
         }
@@ -196,10 +198,10 @@ struct RelationshipRule: Sendable {
         case "mentor/app": b.mentor == a.id
         case "past_app/mentor": a.formerMentors.contains(b.id)
         case "past_mentor/app": b.formerMentors.contains(a.id)
-        case "child/parent": a.parents.contains(b.id)
-        case "parent/child": b.parents.contains(a.id)
-        case "siblings": !Set(a.parents).isDisjoint(with: b.parents)
-        case "littermates": !Set(a.parents).isDisjoint(with: b.parents) && a.moons == b.moons
+        case "child/parent": a.allParents.contains(b.id)
+        case "parent/child": b.allParents.contains(a.id)
+        case "siblings": !Set(a.allParents).isDisjoint(with: b.allParents)
+        case "littermates": !a.parents.isEmpty && Set(a.parents) == Set(b.parents) && a.moons + a.deadFor == b.moons + b.deadFor
         case "strangers": clan.relationship(from: a.id, to: b.id) == nil
         case "can_romance": clan.isPotentialMate(a, b, forLoveInterest: true)
         default: false

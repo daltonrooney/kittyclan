@@ -306,6 +306,42 @@ final class AppModel {
         return changed
     }
 
+    func adoptiveParentCandidates(for cat: Cat, matesOfParentsOnly: Bool, unrelatedOnly: Bool) -> [Cat] {
+        clan?.adoptiveParentCandidates(for: cat.id, matesOfParentsOnly: matesOfParentsOnly, unrelatedOnly: unrelatedOnly) ?? []
+    }
+
+    func adopt(_ kitID: Cat.ID, by parentID: Cat.ID) async {
+        guard var current = clan, !isAdvancing, current.adopt(kitID, by: parentID) else { return }
+        clan = current
+        await save()
+    }
+
+    func unadopt(_ kitID: Cat.ID, from parentID: Cat.ID) async {
+        guard var current = clan, !isAdvancing else { return }
+        var rng = SystemRandomNumberGenerator()
+        guard current.unadopt(kitID, from: parentID, using: &rng) else { return }
+        clan = current
+        await save()
+    }
+
+    /// Sets a Clan cat's gender identity and pronouns, then lets it think anew.
+    func setGender(_ id: Cat.ID, genderAlign: GenderAlign, pronouns: Pronouns) async {
+        guard let assets, var current = clan, !isAdvancing, current.setGender(id, genderAlign: genderAlign, pronouns: pronouns) else { return }
+        var rng = SystemRandomNumberGenerator()
+        assets.engine.refreshThought(for: id, in: &current, using: &rng)
+        clan = current
+        await save()
+    }
+
+    /// A sample sentence using these pronouns for the cat.
+    func pronounPreview(of cat: Cat, pronouns: Pronouns) -> String {
+        guard let assets, let clan else { return "" }
+        var cat = cat
+        cat.pronouns = pronouns
+        let line = "{PRONOUN/m_c/subject/CAP} {VERB/m_c/are/is} proud of {PRONOUN/m_c/self}, and the Clan is proud of {PRONOUN/m_c/object} too."
+        return assets.patrols.template.resolve(line, cats: ["m_c": cat], clan: clan)
+    }
+
     /// The cat's current thought, e.g. "Is watching over the kits".
     func thought(of cat: Cat) -> String? {
         guard let clan else { return nil }
@@ -380,6 +416,12 @@ final class AppModel {
     func setFading(_ fading: Bool) async {
         guard clan != nil, !isAdvancing else { return }
         clan?.fading = fading
+        await save()
+    }
+
+    func setSameSexAdoption(_ on: Bool) async {
+        guard clan != nil, !isAdvancing else { return }
+        clan?.sameSexAdoption = on
         await save()
     }
 
@@ -506,7 +548,7 @@ final class AppModel {
     }
 
     func kits(of cat: Cat) -> [Cat] {
-        clan?.cats.filter { $0.parents.contains(cat.id) } ?? []
+        clan?.cats.filter { $0.allParents.contains(cat.id) } ?? []
     }
 
     func lifeStory(of cat: Cat) -> [LifeEvent] {
@@ -606,7 +648,8 @@ extension AppModel {
     /// `-leaderDen clans|outsiders` (opens the leader's den), `-leaderDenPlan YES` (queues a choice for each tab),
     /// `-camp 1…4` (the camp for `-autofound` or the founding flow), `-foundingStep camp`, `-about YES`,
     /// `-deaths N` (sends N living warriors, apprentices or elders to the afterlife),
-    /// `-afterlife YES|starclan|dark_forest|unknown_residence` (opens the afterlife), `-afterlifeSort rank|death|name`.
+    /// `-afterlife YES|starclan|dark_forest|unknown_residence` (opens the afterlife), `-afterlifeSort rank|death|name`,
+    /// `-adopt YES` (the youngest cat who can be adopted gets its first candidate as an adoptive parent).
     /// The clan screen reads `-clanView camp|list` and `-denLabels YES|NO` straight from its `@AppStorage`.
     func applyDebugLaunchArguments() async {
         let defaults = UserDefaults.standard
@@ -646,6 +689,11 @@ extension AppModel {
         await debugOtherClans()
         await debugAfterlife()
         if defaults.bool(forKey: "feed") { await feed(hungryCats.map(\.id)) }
+        if defaults.bool(forKey: "adopt"), let clan,
+           let kit = clan.living.sorted(by: { $0.moons < $1.moons }).first(where: { !clan.adoptiveParentCandidates(for: $0.id).isEmpty }),
+           let parent = clan.adoptiveParentCandidates(for: kit.id).first {
+            await adopt(kit.id, by: parent.id)
+        }
         selectedCat = debugCatToShow
         isShowingSupplies = defaults.string(forKey: "supplies") != nil
         suppliesStartsAtHerbs = defaults.string(forKey: "supplies") == "herbs"
@@ -723,7 +771,7 @@ extension AppModel {
     }
 
     /// `-showCat first` opens the leader; `-showCat guide` opens the guide; `-showCat dead` opens the most recently dead Clan cat;
-    /// `-showCat outsider` opens the first nearby outsider; `-showCat sick` opens the cat with the most known conditions; `-showCat apprentice` the first apprentice; `-showCat family` the living cat with the most relatives; any other value opens the first cat whose name starts with it.
+    /// `-showCat outsider` opens the first nearby outsider; `-showCat sick` opens the cat with the most known conditions; `-showCat apprentice` the first apprentice; `-showCat family` the living cat with the most relatives; `-showCat adopted` the first cat with an adoptive parent; any other value opens the first cat whose name starts with it.
     var debugCatToShow: Cat? {
         guard let query = UserDefaults.standard.string(forKey: "showCat"), let clan else { return nil }
         if query == "first" { return clan[clan.leader] ?? clan.living.first }
@@ -731,6 +779,7 @@ extension AppModel {
         if query == "guide" { return clan[clan.guide] }
         if query == "dead" { return clan.dead.last { $0.id != clan.guide } }
         if query == "apprentice" { return clan.living.first { $0.rank.isApprentice } }
+        if query == "adopted" { return clan.cats.first { !$0.adoptiveParents.isEmpty } }
         if query == "family" { return clan.living.max { clan.family(of: $0.id).count < clan.family(of: $1.id).count } }
         if query == "sick" {
             return clan.living.max { $0.visibleConditions.count < $1.visibleConditions.count }

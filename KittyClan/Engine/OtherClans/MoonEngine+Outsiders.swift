@@ -51,7 +51,7 @@ extension MoonEngine {
         cat.isNear = true
         clan.cats.append(cat)
         var joined = [id]
-        let kits = clan.outsiders.filter { $0.isAlive && !$0.isExiled && $0.moons < 12 && $0.parents.contains(id) }.map(\.id)
+        let kits = clan.outsiders.filter { $0.isAlive && !$0.isExiled && $0.moons < 12 && $0.allParents.contains(id) }.map(\.id)
         for kit in kits {
             guard let k = clan.outsiders.firstIndex(where: { $0.id == kit }) else { continue }
             var child = clan.outsiders.remove(at: k)
@@ -230,8 +230,14 @@ extension MoonEngine {
             if backstory.contains("kittypet") { social = .kittypet } else if backstory.contains("rogue") { social = .rogue }
             else if backstory.contains("loner") { social = .loner }
         }
-        let parents = (value("parent:")?.split(separator: ",").compactMap { resolve(String($0).trimmingCharacters(in: .whitespaces)) } ?? [])
-            + (value("adoptive:")?.split(separator: ",").compactMap { resolve(String($0).trimmingCharacters(in: .whitespaces)) } ?? [])
+        let blood = value("parent:")?.split(separator: ",").compactMap { resolve(String($0).trimmingCharacters(in: .whitespaces)) } ?? []
+        var adoptive: [UUID] = []
+        for reference in value("adoptive:")?.split(separator: ",") ?? [] {
+            guard let parent = resolve(String(reference).trimmingCharacters(in: .whitespaces)), !adoptive.contains(parent) else { continue }
+            adoptive.append(parent)
+            for mate in clan[parent]?.mates ?? [] where clan.isAlive(mate) && !adoptive.contains(mate) { adoptive.append(mate) }
+        }
+        adoptive.removeAll(where: blood.contains)
         let mates = value("mate:")?.split(separator: ",").compactMap { resolve(String($0).trimmingCharacters(in: .whitespaces)) } ?? []
 
         var rank = value("status:").flatMap(Rank.init)
@@ -271,9 +277,9 @@ extension MoonEngine {
         let joins = !meeting && !dead
         for _ in 0..<count {
             let finalRank = rank ?? (moons.map { CatAge(moons: $0) }.map(Self.rankForAge) ?? .warrior)
-            var cat = factory.make(rank: finalRank, moons: litterMoons ?? moons, origin: social, using: &rng)
-            if let sex { cat.sex = sex }
-            cat.parents = parents
+            var cat = factory.make(rank: finalRank, moons: litterMoons ?? moons, origin: social, sex: sex, using: &rng)
+            cat.parents = blood
+            cat.adoptiveParents = adoptive
             let baby = cat.moons < 12
             let keepsOldName = attributes.contains("old_name") || (!attributes.contains("new_name") && Bool.random(using: &rng))
             if !(baby && joins), !joins || keepsOldName {
@@ -298,8 +304,8 @@ extension MoonEngine {
             ids.append(cat.id)
         }
         for mate in mates { relationships?.setMates(ids[0], mate, in: &clan) }
-        if !parents.isEmpty, joins {
-            relationships?.initializeKits(ids, parents: parents.filter { clan.isAlive($0) }, in: &clan, using: &rng)
+        if joins, !(blood + adoptive).isEmpty {
+            relationships?.initializeKits(ids, parents: (blood + adoptive).filter { clan.isAlive($0) }, in: &clan, using: &rng)
         }
         return (ids, joins)
     }

@@ -78,6 +78,8 @@ struct Clan: Codable, Sendable {
     /// Clangen's `fading` setting: long-dead cats fade from the afterlife.
     var fading = true
     var faded: [FadedCat] = []
+    /// Clangen's `same sex adoption` setting: mates who can't have kits together may find a litter to adopt.
+    var sameSexAdoption = false
 
     var displayName: String { prefix + "Clan" }
 
@@ -135,12 +137,12 @@ struct Clan: Codable, Sendable {
         body(&relationships[from, default: [:]][to, default: Relationship()])
     }
 
-    /// Ancestors up to grandparents, plus the cat itself.
+    /// Blood and adoptive ancestors up to grandparents, plus the cat itself.
     private func family(of id: UUID) -> Set<UUID> {
         var result: Set<UUID> = [id]
-        for parent in self[id]?.parents ?? [] {
+        for parent in self[id]?.allParents ?? [] {
             result.insert(parent)
-            result.formUnion(self[parent]?.parents ?? [])
+            result.formUnion(self[parent]?.allParents ?? [])
         }
         return result
     }
@@ -181,5 +183,6 @@ extension Clan {
         guide = try c.decodeIfPresent(UUID.self, forKey: .guide)
         fading = try c.decodeIfPresent(Bool.self, forKey: .fading) ?? true
         faded = try c.decodeIfPresent([FadedCat].self, forKey: .faded) ?? []
+        sameSexAdoption = try c.decodeIfPresent(Bool.self, forKey: .sameSexAdoption) ?? false
     }
 }

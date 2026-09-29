@@ -292,9 +292,9 @@ struct PatrolEngine: Sendable {
                 }
             } else {
                 let age = spec.ages.compactMap(CatAge.init).randomElement(using: &rng) ?? .adult
-                var cat = engine.factory.makeJoiner(origin: origin, using: &rng)
+                let sex = spec.genders.compactMap(Cat.Sex.init).randomElement(using: &rng)
+                var cat = engine.factory.makeJoiner(origin: origin, sex: sex, using: &rng)
                 cat.moons = Int.random(in: min(age.moons.lowerBound, 300)...min(age.moons.upperBound, 300), using: &rng)
-                if let sex = spec.genders.compactMap(Cat.Sex.init).randomElement(using: &rng) { cat.sex = sex }
                 if let (path, tier) = spec.skills.randomElement(using: &rng).flatMap(CatSkills.requirement) {
                     let t = max(tier, 1)
                     cat.skills.primary = Skill(

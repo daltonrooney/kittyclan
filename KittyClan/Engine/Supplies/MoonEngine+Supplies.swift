@@ -20,7 +20,7 @@ extension MoonEngine {
         var queens: Set<UUID> = []
         var fedKits: Set<UUID> = []
         for kit in clan.living where kit.rank.isBaby && kit.moons < 3 {
-            let parents = kit.parents.compactMap { clan[$0] }.filter { clan.isAlive($0.id) }
+            let parents = kit.allParents.compactMap { clan[$0] }.filter { clan.isAlive($0.id) }
             guard let queen = parents.first(where: { $0.sex == .female }) ?? parents.first else { continue }
             queens.insert(queen.id)
             fedKits.insert(kit.id)
@@ -35,7 +35,7 @@ extension MoonEngine {
         var needed = 0.0
         for cat in clan.living {
             if cat.rank.isBaby {
-                let hasQueen = cat.parents.contains { clan.isAlive($0) }
+                let hasQueen = cat.allParents.contains { clan.isAlive($0) }
                 if !hasQueen { needed += preyRequirement(cat.rank) }
             } else {
                 needed += preyRequirement(cat.rank)

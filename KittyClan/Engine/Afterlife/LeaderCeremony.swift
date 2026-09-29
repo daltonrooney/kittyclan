@@ -124,7 +124,7 @@ extension MoonEngine {
         }
         if let pastLeader { givers.append(pastLeader.id) }
 
-        let children = Set(clan.cats.filter { $0.parents.contains(leaderID) }.map(\.id))
+        let children = Set(clan.children(of: leaderID))
         var usedGifts: Set<String> = []
         var usedVirtues: Set<String> = []
         for giverID in givers {
@@ -134,7 +134,7 @@ extension MoonEngine {
                 if life.tags.contains("guide"), giverID != clan.guide { return false }
                 if newClan != life.tags.contains("new_clan") { return false }
                 if life.tags.contains("old_leader"), !ancientLeader { return false }
-                if life.tags.contains("leader_parent"), !leader.parents.contains(giverID) { return false }
+                if life.tags.contains("leader_parent"), !leader.allParents.contains(giverID) { return false }
                 if life.tags.contains("leader_child"), !children.contains(giverID) { return false }
                 if !life.ranks.isEmpty, !life.ranks.contains(giver.rank.rawValue) { return false }
                 if !life.leadTraits.isEmpty, !life.leadTraits.contains(trait) { return false }

@@ -7,13 +7,12 @@ struct CatFactory: Sendable {
     let traits: TraitTable
 
     /// Clangen's gender alignment roll: babies match their sex; older cats are rarely
-    /// nonbinary (1 in 76) or trans (1 in 51), which sets their pronouns.
-    static func pronouns(for sex: Cat.Sex, baby: Bool, using rng: inout some RandomNumberGenerator) -> Pronouns {
-        let matching: Pronouns = sex == .female ? .she : .he
-        guard !baby else { return matching }
-        if Int.random(in: 0...75, using: &rng) == 1 { return .they }
-        if Int.random(in: 0...50, using: &rng) == 1 { return matching == .she ? .he : .she }
-        return matching
+    /// nonbinary (1 in 76) or trans (1 in 51).
+    static func genderAlign(for sex: Cat.Sex, baby: Bool, using rng: inout some RandomNumberGenerator) -> GenderAlign {
+        guard !baby else { return .cis(sex) }
+        if Int.random(in: 0...75, using: &rng) == 1 { return .nonbinary }
+        if Int.random(in: 0...50, using: &rng) == 1 { return .trans(sex) }
+        return .cis(sex)
     }
 
     /// Clangen's `_get_random_age_from_rank` and moon ranges for new cats.
@@ -42,22 +41,28 @@ struct CatFactory: Sendable {
         }
     }
 
+    /// - Parameter sex: Clangen's gender override; random when nil.
     func make(
         rank: Rank,
         moons: Int? = nil,
         origin: Cat.Origin = .founder,
+        sex: Cat.Sex? = nil,
         using rng: inout some RandomNumberGenerator
     ) -> Cat {
         let moons = moons ?? Self.randomMoons(for: rank, using: &rng)
-        let sex: Cat.Sex = Bool.random(using: &rng) ? .female : .male
+        let random: Cat.Sex = Bool.random(using: &rng) ? .female : .male
+        let sex = sex ?? random
         let age = CatAge(moons: moons)
         let baby = age == .newborn || age == .kitten
         let looks = appearance.generate(female: sex == .female, age: age, using: &rng)
+        let name = names.generate(for: looks, using: &rng)
+        let gender = Self.genderAlign(for: sex, baby: baby, using: &rng)
         return Cat(
             id: UUID(),
-            name: names.generate(for: looks, using: &rng),
+            name: name,
             sex: sex,
-            pronouns: Self.pronouns(for: sex, baby: baby, using: &rng),
+            genderAlign: gender,
+            pronouns: gender.defaultPronouns,
             moons: moons,
             appearance: looks,
             personality: traits.random(kit: baby, using: &rng),
@@ -79,7 +84,8 @@ struct CatFactory: Sendable {
             id: UUID(),
             name: names.generate(for: looks, using: &rng),
             sex: sex,
-            pronouns: sex == .female ? .she : .he,
+            genderAlign: .cis(sex),
+            pronouns: GenderAlign.cis(sex).defaultPronouns,
             moons: 0,
             appearance: looks,
             personality: traits.random(kit: true, using: &rng),
@@ -90,8 +96,8 @@ struct CatFactory: Sendable {
     }
 
     /// A loner, rogue or kittypet who asks to join. Half keep their outsider name.
-    func makeJoiner(origin: Cat.Origin, using rng: inout some RandomNumberGenerator) -> Cat {
-        var cat = make(rank: .warrior, moons: Int.random(in: 23...120, using: &rng), origin: origin, using: &rng)
+    func makeJoiner(origin: Cat.Origin, sex: Cat.Sex? = nil, using rng: inout some RandomNumberGenerator) -> Cat {
+        var cat = make(rank: .warrior, moons: Int.random(in: 23...120, using: &rng), origin: origin, sex: sex, using: &rng)
         if Bool.random(using: &rng) {
             cat.name = names.outsiderName(for: origin, using: &rng)
         }

@@ -25,14 +25,23 @@ struct ClangenNarrator: Narrator {
             guard let cat = clan[mother], let mate = clan[father],
                   let line = library.twoParentBirths.randomElement(using: &rng)
             else { break }
-            let amount = kits.count == 1
-                ? library.kitAmount["one"] ?? "single kitten"
-                : (library.kitAmount["many"] ?? "litter of %{count} kits").replacing("%{count}", with: "\(kits.count)")
-            return template.resolve(line.replacing("{insert}", with: amount), cats: ["m_c": cat, "r_c": mate], clan: clan)
+            return template.resolve(line.replacing("{insert}", with: kitAmount(kits.count)), cats: ["m_c": cat, "r_c": mate], clan: clan)
+        case .adopted(let parents, let kits):
+            let adults = parents.compactMap { clan[$0] }
+            guard !adults.isEmpty else { break }
+            let verb = adults.count == 1 ? "decides" : "decide"
+            return "\(template.list(adults)) found a \(kitAmount(kits.count)) and \(verb) to adopt \(kits.count == 1 ? "it" : "them")."
         default:
             break
         }
         return fallback.text(for: event, in: clan, using: &rng)
+    }
+
+    /// Clangen's `kit_amount`, e.g. "litter of 3 kits".
+    private func kitAmount(_ count: Int) -> String {
+        count == 1
+            ? library.kitAmount["one"] ?? "single kitten"
+            : (library.kitAmount["many"] ?? "litter of %{count} kits").replacing("%{count}", with: "\(count)")
     }
 
     private func ceremony(for id: UUID, oldName: String, in clan: Clan, using rng: inout some RandomNumberGenerator) -> String? {
