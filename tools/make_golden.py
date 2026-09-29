@@ -9,9 +9,11 @@ Run from the ClanGen repo root with its venv:
 Writes to KittyClanTests/Golden (relative to this script's repo):
   cat_NNN.png      raw 50x50 RGBA output of display_sprites.generate_sprite
   cats.json        appearance attributes for each cat
+  collar_cells.json SHA-256 of every collar's recoloured cells, per collar id
   blend_cases.json pygame per-pixel blend results for each blend op used
 """
 
+import hashlib
 import json
 import os
 import random
@@ -169,6 +171,61 @@ def build_cats():
     return cats
 
 
+def build_collar_cats():
+    """Targeted collar fixtures, drawn after the main cats so their random rolls are unchanged.
+
+    Colours ending in a digit stay on poses 10 and up, where Clangen's sprite keys don't collide.
+    """
+    wild_tail = [a for a in Pelt.wild_accessories if a in Pelt.tail_accessories]
+    specs = [
+        (CatAge.ADULT, ("LEATHER_BELL_SPIKE_white_gold2",)),
+        (CatAge.SENIOR, ("NYLON_BELL_white1",)),
+        (CatAge.ADULT, (random.choice([c for c in Pelt.collar_accessories if c.startswith("PUFFBALL_DOUBLECOLOR_")]),)),
+        (CatAge.YOUNG_ADULT, (random.choice([c for c in Pelt.collar_accessories if c.startswith("BOW_FOIL_")]),)),
+        (CatAge.SENIOR_ADULT, ("NYLON_black_gold",)),
+        (CatAge.ADULT, (random.choice(wild_tail), random.choice(Pelt.collar_accessories))),
+        (CatAge.KITTEN, ("PUFFBALL_GRADIENT_rainbow",)),
+        (CatAge.ADOLESCENT, ("LEATHER_BELL_crimson",)),
+    ]
+    cats = []
+    for age, accessories in specs:
+        p = Pelt.generate_new_pelt(random.choice(("male", "female")), (), age)
+        p.accessory = accessories
+        p.init_tint()
+        cats.append([p, age])
+    return cats
+
+
+def collar_cells():
+    """SHA-256 of each collar's cells in pose order, recoloured like `apply_palettes` but
+    from a fresh copy of each base cell, so Clangen's colliding sprite keys don't apply."""
+    data = sprites.COLLAR_DATA
+    sheet = pygame.image.load("sprites/acc_collars.png").convert_alpha()
+    poses = sprites.POSE_DATA["poses"]
+    out = {}
+    for row, group in enumerate(data["style_data"]):
+        for col, (style, colours) in enumerate(group.items()):
+            palette = pygame.image.load(f"sprites/palettes/acc_collars{style}_palette.png")
+            rows = pygame.PixelArray(palette)
+            table = [[palette.unmap_rgb(px) for px in rows[::, y]] for y in range(rows.shape[1])]
+            rows.close()
+            for k, colour in enumerate(colours[: len(table) - 1], start=1):
+                digest = hashlib.sha256()
+                for i, pose in enumerate(poses):
+                    if pose == "":
+                        continue
+                    x = col * 4 * 50 + (i % 4) * 50
+                    y = row * 8 * 50 + (i // 4) * 50
+                    cell = pygame.PixelArray(sheet.subsurface(x, y, 50, 50).copy())
+                    for base, new in zip(table[0], table[k]):
+                        cell.replace(base, new)
+                    surf = cell.make_surface()
+                    cell.close()
+                    digest.update(pygame.image.tobytes(surf, "RGBA"))
+                out[f"{style}_{colour}"] = digest.hexdigest()
+    return out
+
+
 def pose_index(p: Pelt, age: CatAge) -> int:
     return sprites.POSE_DATA["poses"].index(p.cat_sprites[age])
 
@@ -298,6 +355,10 @@ def main():
     for i, (p, age) in enumerate(cats):
         pygame.image.save(render(p, age), str(OUT / f"cat_{i:03d}.png"))
         records.append(pelt_json(i, p, age))
+    for i, (p, age) in enumerate(build_collar_cats(), start=len(cats)):
+        pygame.image.save(render(p, age), str(OUT / f"cat_{i:03d}.png"))
+        records.append(pelt_json(i, p, age))
+    (OUT / "collar_cells.json").write_text(json.dumps(collar_cells(), indent=0) + "\n")
     (OUT / "cats.json").write_text(json.dumps(records, indent=2) + "\n")
     (OUT / "blend_cases.json").write_text(json.dumps(blend_cases()) + "\n")
 

@@ -28,7 +28,7 @@ SHEETS = [
     "lineart", "heterochromiamask", "eyes", "pelt_parts_masks", "skin",
     "scars", "scars_missing_part", "patches_white_little", "patches_white_mid",
     "patches_white_high", "patches_white_mostly", "patches_points",
-    "patches_vitiligo", "patches_tortie", "acc_plants", "acc_wilds",
+    "patches_vitiligo", "patches_tortie", "acc_plants", "acc_wilds", "acc_collars",
     "lineart_sc", "lineart_df", "lineart_ur", "line_sc_overlay", "line_ur_underlay",
     "line_ur_overlay", "line_ur_gradient", "fademask", "fadestarclan", "fadedarkforest",
     "fadeunknownresidence",
@@ -72,6 +72,29 @@ def entries(sprite_list):
     return out
 
 
+def collar_tables():
+    """Collar styles with their sheet group and palette rows, plus every collar id in Clangen's order.
+
+    Palettes are exported as raw RGBA lists because iOS would premultiply a PNG's alpha.
+    A style whose palette has fewer rows than colour names (LEATHER_BELL) loses the
+    unbuilt names, as Clangen never makes their sprites.
+    """
+    data = load("collar_sprite_data")
+    styles, ids = [], []
+    for row, group in enumerate(data["style_data"]):
+        for col, (style, colours) in enumerate(group.items()):
+            palette = Image.open(CLANGEN / "sprites" / "palettes" / f"acc_collars{style}_palette.png").convert("RGBA")
+            width, height = palette.size
+            rows = [[list(palette.getpixel((x, y))) for x in range(width)] for y in range(height)]
+            usable = colours[: height - 1]
+            styles.append({
+                "style": style, "row": row, "col": col, "base": rows[0],
+                "colours": {c: rows[k] for k, c in enumerate(usable, start=1)},
+            })
+            ids += [f"{style}_{c}" for c in usable]
+    return styles, ids
+
+
 def write_rgba(png, out):
     image = Image.open(png).convert("RGBA")
     compressor = zlib.compressobj(9, zlib.DEFLATED, -15)
@@ -99,6 +122,11 @@ def main():
         sheets[sheet] = [[n, r, c] for n, r, c, _ in rows]
         if sheet in ("acc_plants", "acc_wilds"):
             body_parts.update({n: v for n, _, _, v in rows})
+    collar_styles, collar_ids = collar_tables()
+    sheets["acc_collars"] = [[s["style"], s["row"], s["col"]] for s in collar_styles]
+    body_parts.update({i: "collar" for i in collar_ids})
+    with open(CLANGEN / "resources" / "lang" / "en" / "cat" / "accessories.en.json", encoding="utf-8") as f:
+        accessory_names = {k: v for k, v in json.load(f)["en"].items() if isinstance(v, dict)}
 
     eye_groups = {}
     for name, _, _, group in entries(load("eye_sprite_data")["sprite_list"]):
@@ -117,6 +145,9 @@ def main():
         "accessoryBodyParts": body_parts,
         "plants": [n for n, *_ in sheets["acc_plants"]],
         "wild": [n for n, *_ in sheets["acc_wilds"]],
+        "collars": collar_ids,
+        "collarStyles": collar_styles,
+        "accessoryNames": accessory_names,
         "eyeGroups": eye_groups,
         "whitePatches": white,
         "whitePatchCombos": {

@@ -16,7 +16,8 @@ enum SpriteError: Error, CustomStringConvertible {
     }
 }
 
-/// Slices 50×50 cells out of Clangen's sprite sheets, including generated patch combos.
+/// Slices 50×50 cells out of Clangen's sprite sheets, including generated patch combos
+/// and palette-recoloured collars.
 ///
 /// A sheet is a grid of groups, each 4×8 cells (one per pose index). Decoded sheets are
 /// large, so they live in a purgeable cache while sliced cells are kept.
@@ -58,6 +59,11 @@ final class SpriteAtlas: @unchecked Sendable {
                 combined.blit(try sprite(partSheet, partName, pose: pose))
             }
             cell = combined
+        } else if sheet == "acc_collars", let style = index.collarStyle(of: name) {
+            let colour = style.colours[String(name.dropFirst(style.style.count + 1))]!
+            var recoloured = try slice(sheet: sheet, row: style.row, col: style.col, pose: pose)
+            recoloured.replaceExact(style.base, with: colour)
+            cell = recoloured
         } else {
             guard let position = positions[sheet]?[name] else {
                 throw SpriteError.unknownSprite(sheet: sheet, name: name)

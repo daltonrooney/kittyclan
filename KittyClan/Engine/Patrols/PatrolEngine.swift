@@ -288,7 +288,9 @@ struct PatrolEngine: Sendable {
             if spec.litter {
                 let moons = Int.random(in: 0...5, using: &rng)
                 for _ in 0..<Int.random(in: 2...6, using: &rng) {
-                    made.append(engine.factory.make(rank: moons == 0 ? .newborn : .kitten, moons: moons, origin: origin, using: &rng))
+                    var kit = engine.factory.make(rank: moons == 0 ? .newborn : .kitten, moons: moons, origin: origin, using: &rng)
+                    engine.factory.maybeCollar(&kit, using: &rng)
+                    made.append(kit)
                 }
             } else {
                 let age = spec.ages.compactMap(CatAge.init).randomElement(using: &rng) ?? .adult

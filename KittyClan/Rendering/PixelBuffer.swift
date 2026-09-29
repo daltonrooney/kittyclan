@@ -126,6 +126,21 @@ struct PixelBuffer: Equatable, Sendable {
         blit(.fill(color, width: width, height: height), blend)
     }
 
+    /// pygame's `PixelArray.replace` for each pair in order, matching exact RGBA only.
+    /// A pixel changed by one pair can be changed again by a later one.
+    mutating func replaceExact(_ from: [[UInt8]], with to: [[UInt8]]) {
+        func packed(_ c: [UInt8]) -> UInt32 {
+            c.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
+        }
+        let pairs = zip(from, to).filter { $0.count == 4 && $1.count == 4 }.map { (packed($0), packed($1)) }
+        bytes.withUnsafeMutableBytes { raw in
+            let pixels = raw.bindMemory(to: UInt32.self)
+            for (f, t) in pairs {
+                for i in pixels.indices where pixels[i] == f { pixels[i] = t }
+            }
+        }
+    }
+
     func flippedHorizontally() -> PixelBuffer {
         var out = self
         for y in 0..<height {

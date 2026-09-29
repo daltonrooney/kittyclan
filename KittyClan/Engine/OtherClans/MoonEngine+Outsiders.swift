@@ -279,6 +279,7 @@ extension MoonEngine {
             if !(baby && joins), !joins || keepsOldName {
                 cat.name = factory.names.outsiderName(for: social, using: &rng)
             }
+            if !(baby && joins) { factory.maybeCollar(&cat, using: &rng) }
             if dead {
                 cat.enterAfterlife(clan.afterlife(for: cat, isOutsider: !joins), moon: clan.age, using: &rng)
             }

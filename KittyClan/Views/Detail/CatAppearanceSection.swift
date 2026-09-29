@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct CatAppearanceSection: View {
+    @Environment(AppModel.self) private var model
     let appearance: CatAppearance
 
     var body: some View {
@@ -17,8 +18,16 @@ struct CatAppearanceSection: View {
             if let vitiligo = a.vitiligo { LabeledContent("Vitiligo", value: pretty(vitiligo)) }
             LabeledContent("Skin", value: pretty(a.skin))
             if !a.scars.isEmpty { LabeledContent("Scars", value: a.scars.map(pretty).joined(separator: ", ")) }
-            if !a.accessories.isEmpty { LabeledContent("Wearing", value: a.accessories.map(pretty).joined(separator: ", ")) }
+            if !a.accessories.isEmpty { LabeledContent("Wearing", value: wearing(a.accessories)) }
         }
+    }
+
+    /// Clangen's profile list: collars first, then everything else, by their display names.
+    private func wearing(_ accessories: [String]) -> String {
+        guard let index = model.assets?.renderer.atlas.index else { return accessories.map(pretty).joined(separator: ", ") }
+        let ordered = accessories.filter { index.collarStyle(of: $0) != nil } + accessories.filter { index.collarStyle(of: $0) == nil }
+        let text = ordered.map { index.accessoryName($0) }.joined(separator: ", ")
+        return text.prefix(1).uppercased() + text.dropFirst()
     }
 
     private func pretty(_ id: String?) -> String {

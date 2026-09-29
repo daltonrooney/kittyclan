@@ -731,6 +731,9 @@ extension AppModel {
         if query == "guide" { return clan[clan.guide] }
         if query == "dead" { return clan.dead.last { $0.id != clan.guide } }
         if query == "apprentice" { return clan.living.first { $0.rank.isApprentice } }
+        if query == "collar", let index = assets?.renderer.atlas.index {
+            return (clan.living + clan.outsiders.filter(\.isAlive)).first { $0.appearance.accessories.contains { index.collarStyle(of: $0) != nil } }
+        }
         if query == "family" { return clan.living.max { clan.family(of: $0.id).count < clan.family(of: $1.id).count } }
         if query == "sick" {
             return clan.living.max { $0.visibleConditions.count < $1.visibleConditions.count }

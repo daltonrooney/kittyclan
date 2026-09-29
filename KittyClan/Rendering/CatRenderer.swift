@@ -117,11 +117,11 @@ final class CatRenderer: @unchecked Sendable {
             sprite.blit(layer, .minRGBA)
         }
 
-        // Clangen files "head" accessories under body, so only three categories draw.
-        for parts in [["tail"], ["body", "head"], ["paw"]] {
+        // Clangen files "head" accessories under body, so only four categories draw.
+        for parts in [["collar"], ["tail"], ["body", "head"], ["paw"]] {
             for accessory in cat.accessories {
                 guard let part = index.accessoryBodyParts[accessory], parts.contains(part) else { continue }
-                let sheet = index.plants.contains(accessory) ? "acc_plants" : "acc_wilds"
+                let sheet = part == "collar" ? "acc_collars" : index.plants.contains(accessory) ? "acc_plants" : "acc_wilds"
                 var layer = try atlas.sprite(sheet, accessory, pose: pose)
                 recolor?(&layer)
                 sprite.blit(layer)
