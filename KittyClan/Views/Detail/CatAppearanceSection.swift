@@ -2,11 +2,14 @@ import SwiftUI
 
 struct CatAppearanceSection: View {
     @Environment(AppModel.self) private var model
-    let appearance: CatAppearance
+    let cat: Cat
 
     var body: some View {
-        let a = appearance
+        let a = cat.appearance
         Section("Appearance") {
+            if let text = model.assets?.appearanceText.describeCat(cat) {
+                Text(text.capitalizedFirst)
+            }
             LabeledContent("Pelt", value: "\(a.length.rawValue.capitalized) \(pretty(a.pattern))")
             LabeledContent("Colour", value: pretty(a.colour))
             if a.isTortie {

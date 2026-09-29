@@ -10,6 +10,31 @@ struct ClanSettingsSheet: View {
             Form {
                 if let clan = model.clan {
                     Section {
+                        NavigationLink {
+                            ClanSymbolPicker(selection: symbol, recommended: ClanSymbols.bundled.recommended(forPrefix: clan.prefix)) {
+                                var rng = SystemRandomNumberGenerator()
+                                symbol.wrappedValue = ClanSymbols.bundled.random(using: &rng)
+                            }
+                            .navigationTitle("\(clan.displayName) Symbol")
+                            .toolbarTitleDisplayMode(.inline)
+                        } label: {
+                            HStack(spacing: 16) {
+                                ClanSymbolImage(symbol: clan.symbol)
+                                    .frame(width: 50, height: 50)
+                                VStack(alignment: .leading) {
+                                    Text(clan.displayName)
+                                        .font(.headline)
+                                    Text(ClanSymbols.bundled[clan.symbol]?.label ?? "No symbol")
+                                        .font(.subheadline.monospaced())
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .disabled(model.isAdvancing)
+                    } header: {
+                        Text("Symbol")
+                    }
+                    Section {
                         LabeledContent {
                             Text(clan.biome.label(camp: clan.camp))
                         } label: {
@@ -62,6 +87,7 @@ struct ClanSettingsSheet: View {
                         Text("Long-dead cats fade from the afterlife unless you keep them from fading.")
                     }
                 }
+                AudioSettingsSection()
                 Section {
                     NavigationLink {
                         AboutView()
@@ -85,6 +111,15 @@ struct ClanSettingsSheet: View {
             Label(title, systemImage: systemImage)
         }
         .disabled(model.isAdvancing)
+    }
+
+    private var symbol: Binding<String?> {
+        Binding {
+            model.clan?.symbol
+        } set: { symbol in
+            guard let symbol else { return }
+            Task { await model.setSymbol(symbol) }
+        }
     }
 
     private func binding(_ option: WritableKeyPath<Clan, Bool>) -> Binding<Bool> {

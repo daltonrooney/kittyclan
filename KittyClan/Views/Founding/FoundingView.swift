@@ -11,6 +11,7 @@ struct FoundingView: View {
                     case .chooseCats: FoundingCatsStep(founding: founding)
                     case .biome: FoundingBiomeStep(founding: founding)
                     case .camp: FoundingCampStep(founding: founding)
+                    case .symbol: FoundingSymbolStep(founding: founding)
                     case .options: FoundingOptionsStep(founding: founding)
                     }
                 }

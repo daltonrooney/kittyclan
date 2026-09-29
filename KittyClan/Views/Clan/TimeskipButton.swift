@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TimeskipButton: View {
     @Environment(AppModel.self) private var model
+    @Environment(AudioDirector.self) private var audio
 
     var body: some View {
         Button(action: timeskip) {
@@ -20,6 +21,7 @@ struct TimeskipButton: View {
     }
 
     private func timeskip() {
+        audio.play(.timeskip)
         Task { await model.timeskip() }
     }
 }

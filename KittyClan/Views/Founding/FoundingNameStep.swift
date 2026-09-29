@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FoundingNameStep: View {
     @Environment(AppModel.self) private var model
+    @Environment(AudioDirector.self) private var audio
     @Bindable var founding: FoundingModel
     @FocusState private var isNameFocused: Bool
 
@@ -37,7 +38,7 @@ struct FoundingNameStep: View {
                 .background(.fill.tertiary, in: .rect(cornerRadius: 20))
                 .onTapGesture { isNameFocused = true }
 
-                Button("Random name", systemImage: "dice.fill", action: founding.randomName)
+                Button("Random name", systemImage: "dice.fill", action: randomName)
                     .labelStyle(.iconOnly)
                     .font(.title)
                     .buttonStyle(.bordered)
@@ -73,6 +74,11 @@ struct FoundingNameStep: View {
                 }
             }
         }
+    }
+
+    private func randomName() {
+        audio.play(.diceRoll)
+        founding.randomName()
     }
 
     private func next() {

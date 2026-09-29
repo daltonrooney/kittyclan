@@ -25,6 +25,7 @@ final class AppModel {
     var suppliesStartsAtHerbs = false
     var isShowingSettings = false
     var isShowingFocus = false
+    var isShowingAllegiances = false
     var isShowingMediation = false
     /// The mediator preselected when the mediation sheet opens.
     var mediationMediator: Cat.ID?
@@ -516,6 +517,28 @@ final class AppModel {
         await save()
     }
 
+    func setSymbol(_ symbol: String) async {
+        guard var current = clan, !isAdvancing, ClanSymbols.bundled[symbol] != nil else { return }
+        current.symbol = symbol
+        clan = current
+        await save()
+    }
+
+    /// The living Clan by rank, as Clangen's Allegiances screen lists it.
+    var allegiances: Allegiances? {
+        guard let assets, let clan else { return nil }
+        return assets.allegiances(of: clan)
+    }
+
+    /// What should be playing: menu music while choosing or founding a Clan, the Clan's own otherwise.
+    var audioScene: AudioScene? {
+        switch state {
+        case .loading, .failed: nil
+        case .choosingClan, .founding: .menu
+        case .playing: clan.map { .clan(biome: $0.biome, camp: $0.camp, season: $0.season) }
+        }
+    }
+
     /// Turns a Clan option such as `fading` or `becomeMediator` on or off.
     func setOption(_ option: WritableKeyPath<Clan, Bool>, _ on: Bool) async {
         guard var current = clan, !isAdvancing else { return }
@@ -716,6 +739,7 @@ final class AppModel {
         slotID = id
         rollCamp()
         state = .playing
+        if savedClans.first(where: { $0.id == id })?.symbol == nil { await save() }
     }
 
     private func closeClan() {
@@ -729,6 +753,7 @@ final class AppModel {
         isShowingSupplies = false
         isShowingSettings = false
         isShowingFocus = false
+        isShowingAllegiances = false
         isShowingMediation = false
         isShowingLeaderDen = false
         isShowingAfterlife = false
@@ -880,7 +905,8 @@ extension AppModel {
     /// `-autofound YES` replaces the last played Clan; `-autofound new` founds into a new save slot.
     /// `-otherClanCats YES` meets a cat of the first neighbouring Clan and has another join from it.
     /// `-mediator YES` makes the first warrior a mediator,
-    /// `-sheet mediate|focus|settings` opens that sheet (without `-showCat`), and `-chooser YES` shows the Clan chooser.
+    /// `-foundingStep symbol` opens the symbol picker, and `-symbol ID` sets the open Clan's symbol.
+    /// `-sheet mediate|focus|settings|allegiances` opens that sheet (without `-showCat`), and `-chooser YES` shows the Clan chooser.
     /// The clan screen reads `-clanView camp|list` and `-denLabels YES|NO` straight from its `@AppStorage`.
     func applyDebugLaunchArguments() async {
         let defaults = UserDefaults.standard
@@ -912,6 +938,9 @@ extension AppModel {
                 case "camp":
                     founding.autopick()
                     founding.showCamp()
+                case "symbol":
+                    founding.autopick()
+                    founding.showSymbol()
                 case "options":
                     founding.autopick()
                     founding.showOptions()
@@ -949,10 +978,12 @@ extension AppModel {
             switch defaults.string(forKey: "sheet") {
             case "mediate": showMediation()
             case "focus": isShowingFocus = true
+            case "allegiances": isShowingAllegiances = true
             case "settings": isShowingSettings = true
             default: break
             }
         }
+        if let symbol = defaults.string(forKey: "symbol") { await setSymbol(symbol) }
         rollCamp()
         await debugPatrol()
         if defaults.bool(forKey: "chooser") { showClanChooser() }

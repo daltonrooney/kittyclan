@@ -4,6 +4,7 @@ import Foundation
 struct SaveSummary: Codable, Hashable, Sendable, Identifiable {
     let id: UUID
     var name: String
+    var symbol: String?
     var moon: Int
     var living: Int
     var season: Season
@@ -13,12 +14,13 @@ struct SaveSummary: Codable, Hashable, Sendable, Identifiable {
     var savedAt: Date
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, moon, living, season, biome, camp, leader, savedAt
+        case id, name, symbol, moon, living, season, biome, camp, leader, savedAt
     }
 
     init(id: UUID, clan: Clan, savedAt: Date = .now) {
         self.id = id
         name = clan.displayName
+        symbol = clan.symbol
         moon = clan.age
         living = clan.living.count
         season = clan.season
@@ -32,6 +34,7 @@ struct SaveSummary: Codable, Hashable, Sendable, Identifiable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
         name = try c.decode(String.self, forKey: .name)
+        symbol = try c.decodeIfPresent(String.self, forKey: .symbol)
         moon = try c.decode(Int.self, forKey: .moon)
         living = try c.decode(Int.self, forKey: .living)
         season = try c.decode(Season.self, forKey: .season)

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(AudioDirector.self) private var audio
 
     var body: some View {
         Group {
@@ -19,6 +20,9 @@ struct RootView: View {
             }
         }
         .task { await load() }
+        .onChange(of: model.audioScene, initial: true) { _, scene in
+            audio.setScene(scene)
+        }
     }
 
     private func load() async {
