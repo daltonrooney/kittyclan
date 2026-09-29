@@ -15,8 +15,8 @@ struct CatDetailView: View {
             ScrollViewReader { proxy in
             List {
                 Section {
-                    CatSprite(cat: cat)
-                        .frame(maxWidth: 220)
+                    CatProfilePortrait(cat: cat)
+                        .frame(maxWidth: 300)
                         .frame(maxWidth: .infinity)
                         .grayscale(cat.isDead && cat.afterlife == nil ? 0.7 : 0)
                         .accessibilityLabel("\(model.displayName(cat)), \(cat.age.label)")
@@ -59,7 +59,7 @@ struct CatDetailView: View {
                     CatRelationshipsSection(cat: cat)
                         .id(DetailSection.relationships)
                 }
-                CatAppearanceSection(appearance: cat.appearance)
+                CatAppearanceSection(cat: cat)
                 if !model.isGuide(cat) {
                     CatLifeStorySection(cat: cat)
                         .id(DetailSection.lifeStory)

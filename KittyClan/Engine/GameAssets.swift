@@ -11,6 +11,7 @@ struct GameAssets: Sendable {
     let skillText: SkillText
     let camps: CampLibrary
     let afterlifeText: AfterlifeText
+    let appearanceText: AppearanceText
 
     static func loadBundled() throws -> GameAssets {
         let renderer = try CatRenderer.bundled()
@@ -44,7 +45,8 @@ struct GameAssets: Sendable {
             patrols: PatrolEngine(library: patrolLibrary, engine: engine, template: template),
             skillText: try SkillText(url: text.appending(path: "skills.en.json")),
             camps: try CampLibrary.bundled(),
-            afterlifeText: try AfterlifeText(directory: text, template: template)
+            afterlifeText: try AfterlifeText(directory: text, template: template),
+            appearanceText: try AppearanceText(url: text.appending(path: "pelts.en.json"))
         )
     }
 
@@ -60,6 +62,10 @@ struct GameAssets: Sendable {
 
     func displayName(_ cat: Cat) -> String {
         names.display(cat.name, rank: cat.rank)
+    }
+
+    func allegiances(of clan: Clan) -> Allegiances {
+        Allegiances(clan: clan, name: displayName) { appearanceText.describeCat($0, short: $1) }
     }
 
     /// The cat's sprite at an age. At its current age a sick or paralyzed cat uses Clangen's special poses.

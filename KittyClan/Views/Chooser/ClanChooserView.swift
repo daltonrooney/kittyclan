@@ -71,6 +71,10 @@ private struct SavedClanRow: View {
                 .background(.fill.tertiary, in: .rect(cornerRadius: 12))
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
+                    if let symbol = summary.symbol {
+                        ClanSymbolImage(symbol: symbol)
+                            .frame(width: 32, height: 32)
+                    }
                     Text(summary.name)
                         .font(.title3.bold())
                     if isLast {

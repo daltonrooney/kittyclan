@@ -179,6 +179,7 @@ def main():
     shutil.copy(CLANGEN / "resources" / "lang" / "en" / "names.json", OUT / "names.json")
     export_text()
     export_camps()
+    export_presentation()
     afterlife = OUT.parent / "Afterlife"
     afterlife.mkdir(exist_ok=True)
     for name in ("starclanbg", "darkforestbg", "urbg"):
@@ -246,6 +247,7 @@ def export_text():
             files[f"patrols/{biome}/{folder}"] = sorted((patrols / biome / folder).glob("*.json"))
     files[""].append(lang / "relationships.en.json")
     files[""].append(lang / "cat" / "skills.en.json")
+    files[""].append(lang / "cat" / "pelts.en.json")
     thoughts = lang / "thoughts"
     for path in sorted(thoughts.rglob("*.json")):
         files.setdefault(str(path.parent.relative_to(lang)), []).append(path)
@@ -294,6 +296,52 @@ def export_camps():
     layouts = {key: value for key, value in placements.items() if key == "default" or key.startswith(tuple(b.capitalize() for b in BIOMES))}
     with open(out / "layouts.json", "w", encoding="utf-8") as f:
         json.dump(layouts, f)
+
+
+def symbol_layout():
+    """Clangen's `load_symbols`: each symbol's sprite id, grid cell and tags, in Clangen's order.
+
+    Rows follow the first letter (U and X have none); symbols with several variants take
+    one cell per variant, and the column bookkeeping reproduces Clangen's exactly.
+    """
+    with open(CLANGEN / "resources" / "dicts" / "clan_symbols.json", encoding="utf-8") as f:
+        symbols = json.load(f)
+    out = []
+    for row, letter in enumerate("ABCDEFGHIJKLMNOPQRSTVWYZ", start=1):
+        x_mod = 0
+        names = [s for s in symbols if letter in s and symbols[s]["variants"]]
+        for i, name in enumerate(names):
+            variants = symbols[name]["variants"]
+            if variants > 1 and x_mod > 0:
+                x_mod -= 1
+            for variant in range(variants):
+                x_pos = i + x_mod
+                if variants > 1:
+                    x_mod += 1
+                elif x_mod > 0:
+                    x_pos -= 1
+                out.append({
+                    "id": f"symbol{name.upper()}{variant}", "name": name, "column": x_pos, "row": row,
+                    "tags": symbols[name].get(f"tags{variant}", []),
+                })
+    return out
+
+
+def export_presentation():
+    """Clan symbols, profile platforms and the audio playlists (the audio files themselves are not bundled)."""
+    out = OUT.parent / "Presentation"
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    shutil.copy(CLANGEN / "sprites" / "symbols.png", out / "symbols.png")
+    with open(out / "symbols.json", "w", encoding="utf-8") as f:
+        json.dump(symbol_layout(), f, separators=(",", ":"))
+    shutil.copy(CLANGEN / "resources" / "images" / "platforms.png", out / "platforms.png")
+
+    audio = OUT.parent / "Audio"
+    audio.mkdir(exist_ok=True)
+    for name in ("music.json", "ambiance.json", "sounds.json"):
+        shutil.copy(CLANGEN / "resources" / "audio" / name, audio / name)
 
 
 def export_patrol_art(patrol_files):

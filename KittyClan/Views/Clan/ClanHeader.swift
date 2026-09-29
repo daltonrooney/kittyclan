@@ -8,6 +8,8 @@ struct ClanHeader: View {
     var body: some View {
         if let clan = model.clan {
             HStack(alignment: .center, spacing: 20) {
+                ClanSymbolImage(symbol: clan.symbol)
+                    .frame(width: 100, height: 100)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(clan.displayName)
                         .font(.system(.largeTitle, design: .rounded, weight: .bold))

@@ -57,6 +57,9 @@ struct ClanView: View {
             .sheet(isPresented: $model.isShowingSettings) {
                 ClanSettingsSheet()
             }
+            .sheet(isPresented: $model.isShowingAllegiances) {
+                AllegiancesSheet()
+            }
             .sheet(isPresented: $model.isShowingFocus) {
                 WarriorsDenSheet()
             }

@@ -44,7 +44,7 @@ struct FoundingCampStep: View {
         .safeAreaInset(edge: .bottom) {
             HStack {
                 Spacer()
-                Button(action: founding.showOptions) {
+                Button(action: founding.showSymbol) {
                     Label("Next", systemImage: "arrow.right")
                         .font(.title3.bold())
                         .padding(.horizontal, 12)

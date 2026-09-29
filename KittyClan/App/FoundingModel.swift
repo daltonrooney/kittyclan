@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// State for ClanGen's founding flow: name the Clan, choose its cats, its biome and camp, then how it lives.
+/// State for ClanGen's founding flow: name the Clan, choose its cats, its biome and camp, its symbol, then how it lives.
 @MainActor
 @Observable
 final class FoundingModel {
@@ -9,6 +9,7 @@ final class FoundingModel {
         case chooseCats
         case biome
         case camp
+        case symbol
         case options
     }
 
@@ -33,6 +34,8 @@ final class FoundingModel {
     }
     /// Which of the biome's four camps the Clan settles in (1–4).
     var camp = 1
+    /// The chosen Clan symbol's sprite id; nil until one is picked.
+    var symbol: String?
     private(set) var candidates: [Cat] = []
     private(set) var selection = FoundingSelection()
     private(set) var rerollsLeft = ClanFounding.rerolls
@@ -83,9 +86,25 @@ final class FoundingModel {
         path = [.chooseCats, .biome, .camp]
     }
 
+    /// Clangen preselects the symbol drawn for the Clan's name, when there is one.
+    func showSymbol() {
+        guard canFound else { return }
+        if symbol == nil { symbol = recommendedSymbol }
+        path = [.chooseCats, .biome, .camp, .symbol]
+    }
+
     func showOptions() {
         guard canFound else { return }
-        path = [.chooseCats, .biome, .camp, .options]
+        path = [.chooseCats, .biome, .camp, .symbol, .options]
+    }
+
+    var recommendedSymbol: String? {
+        ClanSymbols.bundled.recommended(forPrefix: name.trimmingCharacters(in: .whitespaces))
+    }
+
+    func randomSymbol() {
+        var rng = SystemRandomNumberGenerator()
+        symbol = ClanSymbols.bundled.random(using: &rng)
     }
 
     /// Clangen's `random_biome_selection`: another biome and any of its camps.
@@ -144,6 +163,7 @@ final class FoundingModel {
             using: &rng
         )
         clan.becomeMediator = becomeMediator
+        clan.symbol = symbol ?? ClanSymbols.bundled.fallback(forPrefix: clan.prefix, using: &rng)
         return clan
     }
 

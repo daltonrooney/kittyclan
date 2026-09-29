@@ -54,6 +54,8 @@ struct Clan: Codable, Sendable {
     static let maxLeaderLives = 9
 
     var prefix: String
+    /// The Clan's symbol, a Clangen sprite id such as `symbolTHUNDER0`.
+    var symbol = ""
     var age = 0
     var cats: [Cat]
     var leader: UUID?
@@ -186,6 +188,12 @@ extension Clan {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         prefix = try c.decode(String.self, forKey: .prefix)
+        if let symbol = try c.decodeIfPresent(String.self, forKey: .symbol), !symbol.isEmpty {
+            self.symbol = symbol
+        } else {
+            var rng = SystemRandomNumberGenerator()
+            symbol = ClanSymbols.bundled.fallback(forPrefix: prefix, using: &rng)
+        }
         age = try c.decodeIfPresent(Int.self, forKey: .age) ?? 0
         cats = try c.decode([Cat].self, forKey: .cats)
         leader = try c.decodeIfPresent(UUID.self, forKey: .leader)
