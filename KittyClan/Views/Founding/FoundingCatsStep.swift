@@ -37,7 +37,7 @@ struct FoundingCatsStep: View {
                 .buttonStyle(.bordered)
                 .disabled(founding.rerollsLeft == 0)
                 Spacer()
-                Button(action: founding.showCamp) {
+                Button(action: founding.showBiome) {
                     Label("Next", systemImage: "arrow.right")
                         .font(.title3.bold())
                         .padding(.horizontal, 12)

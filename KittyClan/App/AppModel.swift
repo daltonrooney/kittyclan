@@ -106,7 +106,7 @@ final class AppModel {
         }
         var rng = SystemRandomNumberGenerator()
         let living = clan.living
-        campPlacements = assets.camps.place(living, camp: clan.camp, using: &rng)
+        campPlacements = assets.camps.place(living, biome: clan.biome, camp: clan.camp, using: &rng)
             .map { CampPlacement(id: $0.cat, point: $0.point) }
         campOverflow = max(0, living.count(where: { $0.rank != .newborn }) - campPlacements.count)
     }
@@ -408,7 +408,7 @@ final class AppModel {
     /// How the cat died, one line per death, then how the afterlife received them.
     func deathHistory(of cat: Cat) -> [String] {
         guard let clan, let text = assets?.afterlifeText else { return [] }
-        return text.deaths(of: cat, in: clan) + [text.acceptance(of: cat, in: clan)].compactMap(\.self)
+        return text.deaths(of: cat, in: clan) + text.murders(by: cat, in: clan) + [text.acceptance(of: cat, in: clan)].compactMap(\.self)
     }
 
     func ceremony(of cat: Cat) -> [String] {
@@ -771,7 +771,8 @@ extension AppModel {
     /// `-patrolResult YES` (proceeds to the result), `-war YES` (starts a war with the first neighbour),
     /// `-outsiders YES` (exiles and loses a warrior if there are few outsiders, and expands the list),
     /// `-leaderDen clans|outsiders` (opens the leader's den), `-leaderDenPlan YES` (queues a choice for each tab),
-    /// `-camp 1…4` (the camp for `-autofound` or the founding flow), `-foundingStep camp`,
+    /// `-biome forest|mountainous|plains|beach` and `-camp 1…4` (the biome and camp for `-autofound` or the founding flow),
+    /// `-foundingStep biome|camp` (any `-foundingStep` starts a new Clan if one is open),
     /// `-deaths N` (sends N living warriors, apprentices or elders to the afterlife),
     /// `-afterlife YES|starclan|dark_forest|unknown_residence` (opens the afterlife), `-afterlifeSort rank|death|name`,
     /// `-adopt YES` (the youngest cat who can be adopted gets its first candidate as an adoptive parent).
@@ -793,24 +794,32 @@ extension AppModel {
             let founding = FoundingModel(assets: assets)
             founding.autopick()
             founding.preyAndHerbs = !defaults.bool(forKey: "classic")
+            if let biome = debugBiome { founding.biome = biome }
             if let camp = debugCamp { founding.camp = camp }
             await found(from: founding)
-        } else if case .founding(let founding) = state {
-            switch defaults.string(forKey: "foundingStep") {
-            case "cats":
-                founding.randomName()
-                founding.showCats()
-            case "camp":
-                founding.autopick()
-                founding.showCamp()
-            case "options":
-                founding.autopick()
-                founding.showOptions()
-            default:
-                break
+        } else {
+            if defaults.string(forKey: "foundingStep") != nil, debugFounding == nil { startNewClan() }
+            if let founding = debugFounding {
+                switch defaults.string(forKey: "foundingStep") {
+                case "cats":
+                    founding.randomName()
+                    founding.showCats()
+                case "biome":
+                    founding.autopick()
+                    founding.showBiome()
+                case "camp":
+                    founding.autopick()
+                    founding.showCamp()
+                case "options":
+                    founding.autopick()
+                    founding.showOptions()
+                default:
+                    break
+                }
+                if defaults.bool(forKey: "autopick") { founding.autopick() }
+                if let biome = debugBiome { founding.biome = biome }
+                if let camp = debugCamp { founding.camp = camp }
             }
-            if defaults.bool(forKey: "autopick") { founding.autopick() }
-            if let camp = debugCamp { founding.camp = camp }
         }
 
         let moons = defaults.integer(forKey: "timeskips")
@@ -912,7 +921,15 @@ extension AppModel {
 
     private var debugCamp: Int? {
         let camp = UserDefaults.standard.integer(forKey: "camp")
-        return (1...CampLibrary.names.count).contains(camp) ? camp : nil
+        return (1...4).contains(camp) ? camp : nil
+    }
+
+    private var debugFounding: FoundingModel? {
+        if case .founding(let founding) = state { founding } else { nil }
+    }
+
+    private var debugBiome: Biome? {
+        UserDefaults.standard.string(forKey: "biome").flatMap { key in Biome.allCases.first { $0.key == key.lowercased() } }
     }
 
     /// `-showCat first` opens the leader; `-showCat guide` opens the guide; `-showCat dead` opens the most recently dead Clan cat;

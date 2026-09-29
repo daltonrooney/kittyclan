@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Picks which of Clangen's four forest camps the new Clan settles in.
+/// Picks which of the biome's four camps the new Clan settles in.
 struct FoundingCampStep: View {
     @Bindable var founding: FoundingModel
 
@@ -17,16 +17,16 @@ struct FoundingCampStep: View {
                     Text("Where will your Clan live?")
                         .font(.largeTitle.bold())
                         .multilineTextAlignment(.center)
-                    Text("Pick a camp for your cats to call home.")
+                    Text("Pick a camp in the \(founding.biome.displayName.lowercased()).")
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
 
                 LazyVGrid(columns: columns, spacing: 20) {
-                    ForEach(CampLibrary.names.indices, id: \.self) { index in
+                    ForEach(founding.biome.campNames.indices, id: \.self) { index in
                         CampPreviewCard(
-                            name: CampLibrary.names[index],
-                            url: founding.assets.camps.background(camp: index + 1, season: .newleaf, dark: false),
+                            name: founding.biome.campNames[index],
+                            url: founding.assets.camps.background(biome: founding.biome, camp: index + 1, season: .newleaf, dark: false),
                             isSelected: founding.camp == index + 1,
                             select: { founding.camp = index + 1 }
                         )

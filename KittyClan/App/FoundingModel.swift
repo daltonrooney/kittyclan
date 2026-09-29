@@ -1,12 +1,13 @@
 import Foundation
 import Observation
 
-/// State for ClanGen's founding flow: name the Clan, choose its cats, its camp, then how it lives.
+/// State for ClanGen's founding flow: name the Clan, choose its cats, its biome and camp, then how it lives.
 @MainActor
 @Observable
 final class FoundingModel {
     enum Step: Hashable {
         case chooseCats
+        case biome
         case camp
         case options
     }
@@ -27,7 +28,10 @@ final class FoundingModel {
     var canStarve = false
     /// Lets warriors and elders become mediators as they age.
     var becomeMediator = false
-    /// Which of Clangen's four forest camps the Clan settles in (1–4).
+    var biome: Biome = .forest {
+        didSet { if biome != oldValue { camp = 1 } }
+    }
+    /// Which of the biome's four camps the Clan settles in (1–4).
     var camp = 1
     private(set) var candidates: [Cat] = []
     private(set) var selection = FoundingSelection()
@@ -69,14 +73,27 @@ final class FoundingModel {
         path = [.chooseCats]
     }
 
+    func showBiome() {
+        guard canFound else { return }
+        path = [.chooseCats, .biome]
+    }
+
     func showCamp() {
         guard canFound else { return }
-        path = [.chooseCats, .camp]
+        path = [.chooseCats, .biome, .camp]
     }
 
     func showOptions() {
         guard canFound else { return }
-        path = [.chooseCats, .camp, .options]
+        path = [.chooseCats, .biome, .camp, .options]
+    }
+
+    /// Clangen's `random_biome_selection`: another biome and any of its camps.
+    func surpriseMe() {
+        var rng = SystemRandomNumberGenerator()
+        if let pick = Biome.allCases.filter({ $0 != biome }).randomElement(using: &rng) { biome = pick }
+        camp = Int.random(in: 1...biome.campNames.count, using: &rng)
+        showCamp()
     }
 
     func toggle(_ cat: Cat) {
@@ -121,6 +138,7 @@ final class FoundingModel {
             members: selection.members.compactMap(cat),
             preyAndHerbs: preyAndHerbs,
             canStarve: canStarve,
+            biome: biome,
             camp: camp,
             engine: assets.engine,
             using: &rng

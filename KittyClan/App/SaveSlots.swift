@@ -7,8 +7,14 @@ struct SaveSummary: Codable, Hashable, Sendable, Identifiable {
     var moon: Int
     var living: Int
     var season: Season
+    var biome: Biome
+    var camp: Int
     var leader: CatAppearance?
     var savedAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, moon, living, season, biome, camp, leader, savedAt
+    }
 
     init(id: UUID, clan: Clan, savedAt: Date = .now) {
         self.id = id
@@ -16,8 +22,23 @@ struct SaveSummary: Codable, Hashable, Sendable, Identifiable {
         moon = clan.age
         living = clan.living.count
         season = clan.season
+        biome = clan.biome
+        camp = clan.camp
         leader = clan[clan.leader].map(\.appearance)
         self.savedAt = savedAt
+    }
+
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        moon = try c.decode(Int.self, forKey: .moon)
+        living = try c.decode(Int.self, forKey: .living)
+        season = try c.decode(Season.self, forKey: .season)
+        biome = try c.decodeIfPresent(Biome.self, forKey: .biome) ?? .forest
+        camp = try c.decodeIfPresent(Int.self, forKey: .camp) ?? 1
+        leader = try c.decodeIfPresent(CatAppearance.self, forKey: .leader)
+        savedAt = try c.decode(Date.self, forKey: .savedAt)
     }
 }
 

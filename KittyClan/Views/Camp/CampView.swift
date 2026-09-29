@@ -10,12 +10,12 @@ struct CampView: View {
 
     var body: some View {
         if let clan = model.clan, let camps = model.assets?.camps {
-            let url = camps.background(camp: clan.camp, season: clan.season, dark: colorScheme == .dark)
+            let url = camps.background(biome: clan.biome, camp: clan.camp, season: clan.season, dark: colorScheme == .dark)
             GeometryReader { proxy in
                 let scale = min(proxy.size.width / CampLayout.canvas.width, proxy.size.height / CampLayout.canvas.height)
                 CampCanvas(
                     backdrop: backdrop,
-                    labels: showsDenLabels ? camps.layouts[clan.camp]?.labels ?? [:] : [:],
+                    labels: showsDenLabels ? camps.layout(biome: clan.biome, camp: clan.camp)?.labels ?? [:] : [:],
                     scale: scale
                 )
                 .frame(width: proxy.size.width, height: proxy.size.height)

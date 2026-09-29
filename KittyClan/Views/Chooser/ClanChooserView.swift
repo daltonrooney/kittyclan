@@ -85,6 +85,7 @@ private struct SavedClanRow: View {
                     Label("Moon \(summary.moon)", systemImage: "moon.fill")
                     Label("^[\(summary.living) cat](inflect: true)", systemImage: "pawprint.fill")
                     Label(summary.season.rawValue, systemImage: summary.season.symbol)
+                    Label(summary.biome.label(camp: summary.camp), systemImage: summary.biome.symbol)
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
