@@ -54,8 +54,14 @@ struct ClanView: View {
             .sheet(isPresented: $model.isShowingAfterlife) {
                 AfterlifeSheet()
             }
-            .sheet(isPresented: $model.isShowingAbout) {
-                AboutSheet()
+            .sheet(isPresented: $model.isShowingSettings) {
+                ClanSettingsSheet()
+            }
+            .sheet(isPresented: $model.isShowingFocus) {
+                WarriorsDenSheet()
+            }
+            .sheet(isPresented: $model.isShowingMediation) {
+                MediationSheet(mediator: model.mediationMediator)
             }
             .sheet(isPresented: $isShowingLog) {
                 NavigationStack {

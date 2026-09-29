@@ -7,6 +7,7 @@ final class AppModel {
     enum State {
         case loading
         case failed(String)
+        case choosingClan
         case founding(FoundingModel)
         case playing
     }
@@ -22,7 +23,11 @@ final class AppModel {
     var isShowingSupplies = false
     /// Scrolls the supplies sheet to the medicine den when it opens.
     var suppliesStartsAtHerbs = false
-    var isShowingAbout = false
+    var isShowingSettings = false
+    var isShowingFocus = false
+    var isShowingMediation = false
+    /// The mediator preselected when the mediation sheet opens.
+    var mediationMediator: Cat.ID?
     var isShowingLeaderDen = false
     var leaderDenTab = LeaderDenTab.clans
     var isShowingAfterlife = false
@@ -32,11 +37,25 @@ final class AppModel {
     /// Living cats who didn't fit in camp at the last roll.
     private(set) var campOverflow = 0
 
-    @ObservationIgnored private(set) var sprites: SpriteCache?
-    @ObservationIgnored private let store: ClanStore
+    /// Every saved Clan, most recently played first.
+    private(set) var savedClans: [SaveSummary] = []
 
-    init(store: ClanStore = .standard) {
-        self.store = store
+    @ObservationIgnored private(set) var sprites: SpriteCache?
+    @ObservationIgnored private let slots: SaveSlots
+    /// The save slot the open Clan is written to. Nil while founding a new Clan.
+    @ObservationIgnored private var slotID: UUID? {
+        didSet { if let slotID { UserDefaults.standard.set(slotID.uuidString, forKey: Self.lastSlotKey) } }
+    }
+
+    private static let lastSlotKey = "lastClanSlot"
+
+    init(slots: SaveSlots = .standard) {
+        self.slots = slots
+    }
+
+    /// The Clan played most recently on this device.
+    var lastClanID: UUID? {
+        UserDefaults.standard.string(forKey: Self.lastSlotKey).flatMap(UUID.init(uuidString:))
     }
 
     func load() async {
@@ -45,11 +64,12 @@ final class AppModel {
             let assets = try await Self.loadAssets()
             self.assets = assets
             sprites = SpriteCache(assets: assets)
-            if let saved = try await store.load() {
-                clan = saved
-                state = .playing
-            } else {
-                state = .founding(FoundingModel(assets: assets))
+            try slots.migrateLegacy()
+            savedClans = slots.summaries()
+            switch savedClans.count {
+            case 0: state = .founding(FoundingModel(assets: assets))
+            case 1: try await open(savedClans[0].id)
+            default: state = .choosingClan
             }
         } catch {
             state = .failed(error.localizedDescription)
@@ -59,6 +79,7 @@ final class AppModel {
     func found(from founding: FoundingModel) async {
         guard let newClan = founding.makeClan() else { return }
         clan = newClan
+        if slotID == nil { slotID = UUID() }
         latestMoon = nil
         rollCamp()
         state = .playing
@@ -413,16 +434,59 @@ final class AppModel {
         await save()
     }
 
-    func setFading(_ fading: Bool) async {
-        guard clan != nil, !isAdvancing else { return }
-        clan?.fading = fading
+    /// Turns a Clan option such as `fading` or `becomeMediator` on or off.
+    func setOption(_ option: WritableKeyPath<Clan, Bool>, _ on: Bool) async {
+        guard var current = clan, !isAdvancing else { return }
+        if option == \Clan.canStarve, on, !current.preyAndHerbs { return }
+        current[keyPath: option] = on
+        clan = current
         await save()
     }
 
-    func setSameSexAdoption(_ on: Bool) async {
-        guard clan != nil, !isAdvancing else { return }
-        clan?.sameSexAdoption = on
+    // MARK: - Mediation
+
+    /// Living Clan cats who can mediate, in roster order.
+    var mediators: [Cat] {
+        clan?.living.filter { $0.rank.isMediator } ?? []
+    }
+
+    func showMediation(for mediator: Cat.ID? = nil) {
+        mediationMediator = mediator
+        isShowingMediation = true
+    }
+
+    func mediationBlock(_ mediator: Cat.ID, _ a: Cat.ID?, _ b: Cat.ID?) -> MediationBlock? {
+        guard let clan else { return .notMediator }
+        return MoonEngine.mediationBlock(mediator, a, b, in: clan)
+    }
+
+    func canMediateRomance(_ a: Cat, _ b: Cat) -> Bool {
+        guard let clan else { return false }
+        return MoonEngine.canMediateRomance(a, b, in: clan)
+    }
+
+    /// Mediates between two cats and saves the Clan. Returns the result lines, or nil if blocked.
+    func mediate(_ mediator: Cat.ID, _ a: Cat.ID, _ b: Cat.ID, sabotage: Bool, allowRomance: Bool) async -> [String]? {
+        guard let assets, let current = clan, !isAdvancing else { return nil }
+        isAdvancing = true
+        defer { isAdvancing = false }
+        let (updated, lines) = await Self.mediate(mediator, a, b, sabotage: sabotage, allowRomance: allowRomance, in: current, engine: assets.engine)
+        guard let lines else { return nil }
+        clan = updated
         await save()
+        return lines
+    }
+
+    // MARK: - Focus
+
+    /// Sets the warriors' den focus from next moon. Returns false if the engine refused it.
+    func setFocus(_ focus: ClanFocus, targets: [OtherClan.ID]) async -> Bool {
+        guard let assets, var current = clan, !isAdvancing,
+              assets.engine.setFocus(focus, targets: targets, in: &current)
+        else { return false }
+        clan = current
+        await save()
+        return true
     }
 
     func patrolArtURL(_ name: String?) -> URL? {
@@ -518,21 +582,72 @@ final class AppModel {
         latestMoon = nil
     }
 
+    // MARK: - Saved Clans
+
+    /// Founds a new Clan in its own save slot, keeping the others.
     func startNewClan() {
         guard let assets else { return }
+        closeClan()
+        savedClans = slots.summaries()
+        state = .founding(FoundingModel(assets: assets))
+    }
+
+    func showClanChooser() {
+        savedClans = slots.summaries()
+        guard !savedClans.isEmpty else { return startNewClan() }
+        closeClan()
+        state = .choosingClan
+    }
+
+    /// Leaves founding for the chooser when other Clans are saved.
+    var canCancelFounding: Bool {
+        if case .founding = state { return !savedClans.isEmpty }
+        return false
+    }
+
+    /// Opens a saved Clan and makes it the one played on next launch.
+    func openClan(_ id: UUID) async {
         do {
-            try store.delete()
+            try await open(id)
         } catch {
-            errorMessage = "Couldn't delete the old Clan: \(error.localizedDescription)"
+            errorMessage = "Couldn't open that Clan: \(error.localizedDescription)"
         }
+    }
+
+    func deleteClan(_ id: UUID) {
+        do {
+            try slots.delete(id)
+        } catch {
+            errorMessage = "Couldn't delete that Clan: \(error.localizedDescription)"
+        }
+        if id == slotID { slotID = nil }
+        savedClans = slots.summaries()
+        if savedClans.isEmpty, case .choosingClan = state { startNewClan() }
+    }
+
+    private func open(_ id: UUID) async throws {
+        guard let saved = try await slots.load(id) else { throw CocoaError(.fileNoSuchFile) }
+        closeClan()
+        clan = saved
+        slotID = id
+        rollCamp()
+        state = .playing
+    }
+
+    private func closeClan() {
         clan = nil
+        slotID = nil
         latestMoon = nil
         campPlacements = []
+        campOverflow = 0
         selectedCat = nil
         patrol = nil
+        isShowingSupplies = false
+        isShowingSettings = false
+        isShowingFocus = false
+        isShowingMediation = false
         isShowingLeaderDen = false
         isShowingAfterlife = false
-        state = .founding(FoundingModel(assets: assets))
     }
 
     func displayName(_ cat: Cat) -> String {
@@ -558,9 +673,9 @@ final class AppModel {
     }
 
     private func save() async {
-        guard let clan else { return }
+        guard let clan, let slotID else { return }
         do {
-            try await store.save(clan)
+            try await slots.save(clan, as: slotID)
         } catch {
             errorMessage = "Couldn't save your Clan: \(error.localizedDescription)"
         }
@@ -585,6 +700,16 @@ final class AppModel {
         var rng = SystemRandomNumberGenerator()
         engine.planLeaderDen(action, target: target, in: &clan, using: &rng)
         return clan
+    }
+
+    @concurrent
+    private static func mediate(
+        _ mediator: Cat.ID, _ a: Cat.ID, _ b: Cat.ID, sabotage: Bool, allowRomance: Bool, in clan: Clan, engine: MoonEngine
+    ) async -> (Clan, [String]?) {
+        var clan = clan
+        var rng = SystemRandomNumberGenerator()
+        let lines = engine.mediate(mediator, a, b, sabotage: sabotage, allowRomance: allowRomance, in: &clan, using: &rng)
+        return (clan, lines)
     }
 
     @concurrent
@@ -646,16 +771,25 @@ extension AppModel {
     /// `-patrolResult YES` (proceeds to the result), `-war YES` (starts a war with the first neighbour),
     /// `-outsiders YES` (exiles and loses a warrior if there are few outsiders, and expands the list),
     /// `-leaderDen clans|outsiders` (opens the leader's den), `-leaderDenPlan YES` (queues a choice for each tab),
-    /// `-camp 1…4` (the camp for `-autofound` or the founding flow), `-foundingStep camp`, `-about YES`,
+    /// `-camp 1…4` (the camp for `-autofound` or the founding flow), `-foundingStep camp`,
     /// `-deaths N` (sends N living warriors, apprentices or elders to the afterlife),
     /// `-afterlife YES|starclan|dark_forest|unknown_residence` (opens the afterlife), `-afterlifeSort rank|death|name`,
     /// `-adopt YES` (the youngest cat who can be adopted gets its first candidate as an adoptive parent).
+    /// `-autofound YES` replaces the last played Clan; `-autofound new` founds into a new save slot.
+    /// `-mediator YES` makes the first warrior a mediator,
+    /// `-sheet mediate|focus|settings` opens that sheet (without `-showCat`), and `-chooser YES` shows the Clan chooser.
     /// The clan screen reads `-clanView camp|list` and `-denLabels YES|NO` straight from its `@AppStorage`.
     func applyDebugLaunchArguments() async {
         let defaults = UserDefaults.standard
         guard let assets else { return }
 
-        if defaults.bool(forKey: "autofound") {
+        let autofound = defaults.string(forKey: "autofound")
+        if autofound == "new" || defaults.bool(forKey: "autofound") {
+            if autofound == "new" {
+                closeClan()
+            } else if slotID == nil {
+                slotID = lastClanID
+            }
             let founding = FoundingModel(assets: assets)
             founding.autopick()
             founding.preyAndHerbs = !defaults.bool(forKey: "classic")
@@ -686,6 +820,9 @@ extension AppModel {
             await save()
         }
 
+        if defaults.bool(forKey: "mediator"), let warrior = clan?.living.first(where: { $0.rank == .warrior && !$0.isNotWorking }) {
+            await changeRank(.mediator, for: warrior.id)
+        }
         await debugOtherClans()
         await debugAfterlife()
         if defaults.bool(forKey: "feed") { await feed(hungryCats.map(\.id)) }
@@ -697,9 +834,17 @@ extension AppModel {
         selectedCat = debugCatToShow
         isShowingSupplies = defaults.string(forKey: "supplies") != nil
         suppliesStartsAtHerbs = defaults.string(forKey: "supplies") == "herbs"
-        isShowingAbout = defaults.bool(forKey: "about")
+        if clan != nil, defaults.string(forKey: "showCat") == nil {
+            switch defaults.string(forKey: "sheet") {
+            case "mediate": showMediation()
+            case "focus": isShowingFocus = true
+            case "settings": isShowingSettings = true
+            default: break
+            }
+        }
         rollCamp()
         await debugPatrol()
+        if defaults.bool(forKey: "chooser") { showClanChooser() }
     }
 
     private func debugOtherClans() async {

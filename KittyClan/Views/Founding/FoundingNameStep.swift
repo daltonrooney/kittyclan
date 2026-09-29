@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct FoundingNameStep: View {
+    @Environment(AppModel.self) private var model
     @Bindable var founding: FoundingModel
     @FocusState private var isNameFocused: Bool
 
@@ -64,6 +65,14 @@ struct FoundingNameStep: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle("New Clan")
         .toolbarTitleDisplayMode(.inline)
+        .toolbar {
+            if model.canCancelFounding {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Your Clans", systemImage: "chevron.backward", action: model.showClanChooser)
+                        .labelStyle(.titleAndIcon)
+                }
+            }
+        }
     }
 
     private func next() {

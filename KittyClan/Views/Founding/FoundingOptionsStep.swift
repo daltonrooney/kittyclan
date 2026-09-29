@@ -15,7 +15,7 @@ struct FoundingOptionsStep: View {
                     Text("How will your Clan live?")
                         .font(.largeTitle.bold())
                         .multilineTextAlignment(.center)
-                    Text("You can't change these later, so choose what sounds fun.")
+                    Text("Prey and herbs can't be changed later, so choose what sounds fun.")
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
@@ -38,6 +38,13 @@ struct FoundingOptionsStep: View {
                         isOn: $founding.canStarve
                     )
                     .disabled(!founding.preyAndHerbs)
+                    FoundingOptionCard(
+                        title: "Warriors and elders may become mediators",
+                        detail: "Some cats may choose to settle quarrels instead of fighting or resting. You can change this in Clan Settings.",
+                        symbol: "person.2.wave.2.fill",
+                        tint: .teal,
+                        isOn: $founding.becomeMediator
+                    )
                 }
                 .frame(maxWidth: 560)
             }

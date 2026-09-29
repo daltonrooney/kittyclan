@@ -10,6 +10,8 @@ struct RootView: View {
                 ProgressView("Gathering the Clan…")
             case .failed(let message):
                 LoadFailedView(message: message)
+            case .choosingClan:
+                ClanChooserView()
             case .founding(let founding):
                 FoundingView(founding: founding)
             case .playing:

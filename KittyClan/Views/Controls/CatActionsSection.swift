@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The player's controls for a cat: role, mentor, mate, adoptive parents, gender and name.
+/// The player's controls for a cat: role, mentor, mediation, mate, adoptive parents, gender and name.
 struct CatActionsSection: View {
     @Environment(AppModel.self) private var model
     let cat: Cat
@@ -15,6 +15,9 @@ struct CatActionsSection: View {
                 }
                 if isClanCat, cat.rank.isApprentice {
                     row("Choose Mentor", systemImage: "graduationcap", value: model.cat(cat.mentor).map(model.displayName) ?? "None", action: .mentor)
+                }
+                if isClanCat, cat.rank.isMediator {
+                    row("Mediate", systemImage: "person.2.wave.2", value: nil, action: .mediate)
                 }
                 if model.canChooseMate(cat) {
                     row("Choose Mate", systemImage: "heart", value: matesText, action: .mate)

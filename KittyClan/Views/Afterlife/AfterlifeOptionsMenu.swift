@@ -20,7 +20,7 @@ struct AfterlifeOptionsMenu: View {
         Binding {
             model.clan?.fading ?? true
         } set: { fading in
-            Task { await model.setFading(fading) }
+            Task { await model.setOption(\.fading, fading) }
         }
     }
 }

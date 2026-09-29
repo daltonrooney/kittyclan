@@ -25,6 +25,8 @@ final class FoundingModel {
         didSet { if !preyAndHerbs { canStarve = false } }
     }
     var canStarve = false
+    /// Lets warriors and elders become mediators as they age.
+    var becomeMediator = false
     /// Which of Clangen's four forest camps the Clan settles in (1–4).
     var camp = 1
     private(set) var candidates: [Cat] = []
@@ -111,7 +113,7 @@ final class FoundingModel {
               let medicineCat = cat(selection.medicineCat)
         else { return nil }
         var rng = SystemRandomNumberGenerator()
-        return assets.founding.found(
+        var clan = assets.founding.found(
             prefix: name,
             leader: leader,
             deputy: deputy,
@@ -123,6 +125,8 @@ final class FoundingModel {
             engine: assets.engine,
             using: &rng
         )
+        clan.becomeMediator = becomeMediator
+        return clan
     }
 
     private func cat(_ id: Cat.ID?) -> Cat? {

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A den's name in camp. The leader's den and medicine den open their sheets; the others are just labels.
+/// A den's name in camp. The leader's, medicine and warriors' dens and the clearing open their sheets; the others are just labels.
 struct CampDenLabel: View {
     @Environment(AppModel.self) private var model
     let den: Den
@@ -17,7 +17,7 @@ struct CampDenLabel: View {
                     .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
             }
             .buttonStyle(.plain)
-            .accessibilityHint(den == .leader ? "Choose how to treat other Clans and outsiders" : "See the herbs in the medicine den")
+            .accessibilityHint(den.campHint ?? "")
         } else {
             Text(den.rawValue)
                 .font(.subheadline.weight(.semibold))
@@ -36,6 +36,10 @@ struct CampDenLabel: View {
         case .medicine:
             model.suppliesStartsAtHerbs = true
             model.isShowingSupplies = true
+        case .clearing:
+            model.showMediation()
+        case .warrior:
+            model.isShowingFocus = true
         default:
             break
         }

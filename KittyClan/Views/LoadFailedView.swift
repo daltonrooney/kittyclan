@@ -11,7 +11,7 @@ struct LoadFailedView: View {
             Text(message)
         } actions: {
             if model.assets != nil {
-                Button("Start a new Clan", role: .destructive, action: model.startNewClan)
+                Button("Start a new Clan", action: model.startNewClan)
             }
         }
     }

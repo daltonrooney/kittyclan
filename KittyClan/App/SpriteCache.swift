@@ -35,6 +35,17 @@ final class SpriteCache {
         return image
     }
 
+    /// A sprite for a cat known only by its looks, such as a saved Clan's leader.
+    func image(for appearance: CatAppearance, age: CatAge = .adult) async -> CGImage? {
+        let assets = assets
+        return await Self.render(appearance, age: age, assets: assets)
+    }
+
+    @concurrent
+    private static func render(_ appearance: CatAppearance, age: CatAge, assets: GameAssets) async -> CGImage? {
+        try? assets.renderer.render(appearance, age: age).cgImage()
+    }
+
     @concurrent
     private static func render(_ cat: Cat, age: CatAge, assets: GameAssets) async -> CGImage? {
         assets.sprite(for: cat, age: age)
