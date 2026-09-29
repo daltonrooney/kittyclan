@@ -23,6 +23,8 @@ struct StoryPick: Sendable {
     var groupCats: [String: [UUID]] = [:]
     /// Death-history text by abbreviation; `m_c` in each means the cat it belongs to.
     var deathHistories: [String: String] = [:]
+    /// The event's `new_accessory` list: `m_c` gains one of these ("WILD", "PLANT", "COLLAR" or ids).
+    var newAccessory: [String] = []
 
     /// The history text for a cat who died in this event, and the other cat involved.
     func deathHistory(for id: UUID) -> (text: String?, involved: UUID?) {
@@ -123,6 +125,8 @@ struct EventLibrary: Sendable {
     private let deaths: [String: [Int: [ShortEvent]]]
     /// Keyed by sub-type ("" or "war") then frequency.
     private let misc: [String: [Int: [ShortEvent]]]
+    /// Misc events with the "accessory" sub-type, keyed by their other sub-type ("", "ceremony" or "war") then frequency.
+    private let accessoryEvents: [String: [Int: [ShortEvent]]]
     private let injuryEvents: [String: [Int: [ShortEvent]]]
     let war: WarText
     let leaderDen: LeaderDenText
@@ -148,15 +152,20 @@ struct EventLibrary: Sendable {
         honors = try load("ceremonies/ceremony_traits.json") as? [String: [String]] ?? [:]
 
         func group(_ list: [ShortEvent]) -> [Int: [ShortEvent]] { Dictionary(grouping: list, by: \.frequency) }
-        let deathEvents = try events("death/general.json", "death/forest.json").compactMap(ShortEvent.init)
+        func parse(_ paths: String...) throws -> [ShortEvent] {
+            try paths.flatMap { try events($0) }.compactMap(ShortEvent.init)
+        }
+        let deathEvents = try parse("death/general.json", "death/forest.json").filter { $0.plain }
         deaths = Dictionary(grouping: deathEvents, by: \.subType).mapValues(group)
         func bySubType(_ list: [ShortEvent]) -> [String: [Int: [ShortEvent]]] {
             Dictionary(grouping: list.filter { ["", "war"].contains($0.subType) }, by: \.subType).mapValues(group)
         }
-        misc = bySubType(try events("misc/general.json", "misc/forest.json").compactMap(ShortEvent.init))
-        injuryEvents = bySubType(try events("injury/general.json", "injury/forest.json").compactMap(ShortEvent.init))
+        let miscEvents = try parse("misc/general.json", "misc/forest.json")
+        misc = bySubType(miscEvents.filter { !$0.isAccessory })
+        accessoryEvents = Dictionary(grouping: miscEvents.filter(\.isAccessory), by: \.subType).mapValues(group)
+        injuryEvents = bySubType(try parse("injury/general.json", "injury/forest.json").filter { $0.plain })
 
-        newCatEvents = bySubType(try events("new_cat/general.json", "new_cat/forest.json").compactMap(ShortEvent.init).filter { !$0.newCats.isEmpty })
+        newCatEvents = bySubType(try parse("new_cat/general.json", "new_cat/forest.json").filter { $0.plain && !$0.newCats.isEmpty })
         outsiderDeaths = try load("outsider_deaths/outsider_deaths.json") as? [String: [String]] ?? [:]
 
         let warJSON = try load("war/war.json") as? [String: Any] ?? [:]
@@ -183,6 +192,7 @@ struct EventLibrary: Sendable {
     var ceremonyCounts: [String: Int] { ceremonies.mapValues(\.count) }
     var deathCount: Int { deaths.values.flatMap(\.values).reduce(0) { $0 + $1.count } }
     var miscCount: Int { misc.values.flatMap(\.values).reduce(0) { $0 + $1.count } }
+    var accessoryEventCount: Int { accessoryEvents.values.flatMap(\.values).reduce(0) { $0 + $1.count } }
     var injuryCount: Int { injuryEvents.values.flatMap(\.values).reduce(0) { $0 + $1.count } }
     var newCatCount: Int { newCatEvents.values.flatMap(\.values).reduce(0) { $0 + $1.count } }
 
@@ -243,6 +253,14 @@ struct EventLibrary: Sendable {
         draw(misc, for: cat, in: clan, context: context, using: &rng)
     }
 
+    /// Clangen's accessory events for `gain_accessories`; a cat who just had a ceremony draws ceremony ones.
+    func accessoryEvent(for cat: Cat, ceremony: Bool, in clan: Clan, context: Context, using rng: inout some RandomNumberGenerator) -> StoryPick? {
+        if ceremony {
+            return accessoryEvents["ceremony"].flatMap { shortEvent(from: $0, for: cat, in: clan, context: context, using: &rng) }
+        }
+        return draw(accessoryEvents, for: cat, in: clan, context: context, using: &rng)
+    }
+
     func injuryEvent(for cat: Cat, in clan: Clan, context: Context, using rng: inout some RandomNumberGenerator) -> StoryPick? {
         draw(injuryEvents, for: cat, in: clan, context: context, using: &rng)
     }
@@ -275,6 +293,7 @@ struct EventLibrary: Sendable {
                     && event.main.matches(cat, allowNewborn: false)
                     && event.injuries.allSatisfy { !$0.cats.contains("m_c") || $0.allows(cat) }
                     && context.supplies(event.supplies)
+                    && (event.newAccessory.isEmpty || cat.appearance.accessories.count < 3)
                     && event.fits(context, clan: clan)
             }
             while !candidates.isEmpty {
@@ -364,12 +383,17 @@ private struct ShortEvent: Sendable {
     let reputationStandings: [String]
     let reputationChange: Int
     let deathHistories: [String: String]
+    let isAccessory: Bool
+    let newAccessory: [String]
     let weight: Int
+
+    /// Neither an accessory event nor one that gives an accessory.
+    var plain: Bool { !isAccessory && newAccessory.isEmpty }
 
     private static let keys: Set<String> = [
         "event_id", "location", "season", "frequency", "sub_type", "tags", "event_text", "death_text",
         "m_c", "r_c", "history", "relationships", "exclude_involved", "supplies", "injury", "other_clan", "outsider",
-        "new_cat",
+        "new_cat", "new_accessory",
     ]
 
     /// New-cat attributes KittyClan can create. Other-Clan cats and Clan-specific backstories aren't supported.
@@ -409,14 +433,21 @@ private struct ShortEvent: Sendable {
               let text = (json["event_text"] ?? json["death_text"]) as? String,
               let blocks = Optional(json["new_cat"] as? [[String]] ?? []),
               blocks.allSatisfy({ $0.allSatisfy(Self.isSupported) }),
-              Constraint.textIsSupported(text, allowing: Set(["m_c", "r_c", "o_c_n"] + blocks.indices.flatMap { ["n_c:\($0)", "n_c_pre:\($0)"] }))
+              let newAccessory = Optional(json["new_accessory"] as? [String] ?? []),
+              Constraint.textIsSupported(text, allowing: Set(
+                  ["m_c", "r_c", "o_c_n"] + blocks.indices.flatMap { ["n_c:\($0)", "n_c_pre:\($0)"] }
+                      + (newAccessory.isEmpty ? [] : ["acc_singular", "acc_plural"])
+              ))
         else { return nil }
+        self.newAccessory = newAccessory
         newCats = blocks
         let excluded = json["exclude_involved"] as? [String] ?? []
         hiddenNewCats = Set(blocks.indices.map { "n_c:\($0)" }.filter { key in
             excluded.contains(key) || blocks[Int(key.dropFirst(4))!].contains("unknown")
         })
-        let subTypes = json["sub_type"] as? [String] ?? []
+        var subTypes = json["sub_type"] as? [String] ?? []
+        isAccessory = subTypes.contains("accessory")
+        subTypes.removeAll { $0 == "accessory" }
         let otherClanJSON = json["other_clan"] as? [String: Any]
         needsOtherClan = otherClanJSON != nil || text.contains("o_c_n") || subTypes == ["war"]
         otherClanStandings = (otherClanJSON?["current_rep"] as? [String] ?? []).filter { $0 != "any" }
@@ -502,6 +533,7 @@ private struct ShortEvent: Sendable {
         let lives: StoryPick.LivesLost = tags.contains("all_lives") ? .all : tags.contains("some_lives") ? .some : .one
         return StoryPick(template: text, cats: cats, deaths: deaths, livesLost: lives, relationshipChanges: relationshipChanges, injuries: injuries, supplies: supplies,
                          relationsChange: relationsChange, reputationChange: reputationChange,
-                         newCats: newCats, hiddenNewCats: hiddenNewCats, deathHistories: deathHistories)
+                         newCats: newCats, hiddenNewCats: hiddenNewCats, deathHistories: deathHistories,
+                         newAccessory: newAccessory)
     }
 }

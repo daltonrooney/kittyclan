@@ -1,3 +1,4 @@
+import CryptoKit
 import XCTest
 @testable import KittyClan
 
@@ -43,8 +44,6 @@ final class RenderingTests: XCTestCase {
 
         var checked = 0
         for f in fixtures {
-            // Collars need palette recolouring, which random cats never use yet.
-            if f.accessories.contains(where: { index.accessoryBodyParts[$0] == nil }) { continue }
             let appearance = CatAppearance(
                 pattern: f.name, colour: f.colour, length: PeltLength(rawValue: f.length)!,
                 eyeColour: f.eyeColour, eyeColour2: f.eyeColour2,
@@ -67,7 +66,37 @@ final class RenderingTests: XCTestCase {
             XCTAssertEqual(mismatches, 0, "\(f.id) (\(f.name) \(f.colour)): \(mismatches) pixels differ, first \(first ?? "")")
             checked += 1
         }
-        XCTAssertGreaterThanOrEqual(checked, 55)
+        XCTAssertEqual(checked, fixtures.count)
+        XCTAssertGreaterThanOrEqual(checked, 68)
+    }
+
+    func testCollarCellsMatchClangenPalettes() throws {
+        let atlas = try CatRenderer.bundled().atlas
+        let index = atlas.index
+        let expected = try JSONDecoder().decode([String: String].self, from: Data(contentsOf: Self.golden.appending(path: "collar_cells.json")))
+        XCTAssertEqual(index.collars.count, 472)
+        XCTAssertFalse(index.collars.contains("LEATHER_BELL_petal2"))
+        XCTAssertEqual(Set(index.collars), Set(expected.keys))
+
+        for id in index.collars {
+            var hash = SHA256()
+            for (pose, name) in index.poses.enumerated() where !name.isEmpty {
+                hash.update(data: Data(try atlas.sprite("acc_collars", id, pose: pose).bytes))
+            }
+            let digest = hash.finalize().map { String(format: "%02x", $0) }.joined()
+            XCTAssertEqual(digest, expected[id], id)
+        }
+    }
+
+    func testCollarsAreNamedByStyle() throws {
+        let index = try CatRenderer.bundled().atlas.index
+        XCTAssertEqual(index.collarStyle(of: "LEATHER_BELL_crimson1")?.style, "LEATHER_BELL")
+        XCTAssertEqual(index.collarStyle(of: "LEATHER_BELL_SPIKE_white_gold2")?.style, "LEATHER_BELL_SPIKE")
+        XCTAssertNil(index.collarStyle(of: "MAPLE LEAF"))
+        XCTAssertEqual(index.accessoryName("LEATHER_BELL_crimson1"), "belled leather collar")
+        XCTAssertEqual(index.accessoryName("PUFFBALL_DOUBLECOLOR_blue_white", form: \.many), "two-color puffball collars")
+        XCTAssertEqual(index.accessoryName("MAPLE LEAF"), "maple leaf")
+        for id in index.collars { XCTAssertEqual(index.accessoryBodyParts[id], "collar") }
     }
 
     func testGeneratedCatsAlwaysRender() throws {

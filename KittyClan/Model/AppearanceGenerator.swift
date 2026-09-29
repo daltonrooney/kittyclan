@@ -154,6 +154,37 @@ struct AppearanceGenerator: Sendable {
 
     private typealias PatternRoll = (pattern: String, colour: String, length: PeltLength, tortieBase: String?, hasWhite: Bool)
 
+    /// A collar picked uniformly over every collar id, like Clangen's `choice(Pelt.collar_accessories)`.
+    func randomCollar(using rng: inout some RandomNumberGenerator) -> String {
+        pick(index.collars, &rng)
+    }
+
+    /// Clangen's `handle_accessories`: an accessory from an event's `new_accessory` list ("WILD", "PLANT",
+    /// "COLLAR" or ids) that the cat can wear. Groups it already wears, and tail or paw items it has
+    /// no tail or paw for, are left out.
+    func eventAccessory(from options: [String], for appearance: CatAppearance, using rng: inout some RandomNumberGenerator) -> String? {
+        var candidates: [String] = []
+        if options.contains("WILD") { candidates += index.wild }
+        if options.contains("PLANT") { candidates += index.plants }
+        if options.contains("COLLAR") { candidates += index.collars }
+        candidates += options.filter { !["WILD", "PLANT", "COLLAR"].contains($0) }
+
+        let scars = Set(appearance.scars)
+        let worn = Set(appearance.accessories.compactMap(accessoryGroup))
+        candidates.removeAll { id in
+            guard let group = accessoryGroup(id) else { return false }
+            if group == "tail", !scars.isDisjoint(with: ["NOTAIL", "HALFTAIL"]) { return true }
+            if group == "paw", scars.contains("NOPAW") { return true }
+            return worn.contains(group)
+        }
+        return candidates.isEmpty ? nil : pick(candidates, &rng)
+    }
+
+    /// Clangen's accessory groups: collar, tail, body (with head items) and paw.
+    private func accessoryGroup(_ id: String) -> String? {
+        index.accessoryBodyParts[id].map { $0 == "head" ? "body" : $0 }
+    }
+
     private func randomPattern(female: Bool, _ rng: inout some RandomNumberGenerator) -> PatternRoll {
         let category = weighted(Array(zip(Self.patternCategories, [35, 20, 30, 15])), &rng)
         var pattern = pick(index.patterns(inCategory: category), &rng)

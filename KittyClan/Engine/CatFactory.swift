@@ -101,6 +101,13 @@ struct CatFactory: Sendable {
         if Bool.random(using: &rng) {
             cat.name = names.outsiderName(for: origin, using: &rng)
         }
+        maybeCollar(&cat, using: &rng)
         return cat
+    }
+
+    /// Clangen gives half of the kittypets it creates a collar.
+    func maybeCollar(_ cat: inout Cat, using rng: inout some RandomNumberGenerator) {
+        guard cat.origin == .kittypet, Bool.random(using: &rng) else { return }
+        cat.appearance.accessories.append(appearance.randomCollar(using: &rng))
     }
 }

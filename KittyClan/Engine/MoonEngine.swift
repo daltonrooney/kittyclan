@@ -62,7 +62,8 @@ struct MoonEngine: Sendable {
             guard let i = clan.index(of: id), clan.cats[i].rank != .newborn else { continue }
 
             gainApprenticeExperience(i, in: &clan, using: &rng)
-            events += ceremonies(for: id, in: &clan, using: &rng)
+            let ceremony = ceremonies(for: id, in: &clan, using: &rng)
+            events += ceremony
             progressSkills(id, in: &clan, using: &rng)
             if clan[id]?.isDisabled == true {
                 events += progressDisabilities(for: id, skip: &skip, in: &clan, using: &rng)
@@ -95,12 +96,14 @@ struct MoonEngine: Sendable {
             }
             if oneIn(30, &rng), let cat = clan[id],
                var pick = library?.miscEvent(for: cat, in: clan, context: eventContext(for: clan, using: &rng), using: &rng),
+               giveAccessory(for: &pick, in: &clan, using: &rng),
                addNewCats(to: &pick, in: &clan, counts: &interactions, using: &rng) != nil {
                 relationships?.apply(pick.relationshipChanges, cats: pick.allCats, in: &clan, using: &rng)
                 applyEventEffects(pick, in: &clan, using: &rng)
                 applyInjuries(pick.injuries, cats: pick.cats, in: &clan, using: &rng)
                 events.append(.story(pick, .info))
             }
+            events += gainAccessory(id, hadCeremony: !ceremony.isEmpty, in: &clan, counts: &interactions, using: &rng)
             if Bool.random(using: &rng) {
                 events += deathRolls(for: id, in: &clan, using: &rng)
                 if clan.isAlive(id) { events += rollIllness(for: id, in: &clan, using: &rng) }
