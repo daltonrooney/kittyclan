@@ -8,7 +8,7 @@ struct CatAboutSection: View {
     var body: some View {
         Section("About") {
             if isOutsider {
-                LabeledContent("Lives as", value: cat.socialLabel)
+                LabeledContent("Lives as", value: model.socialLabel(of: cat))
                 if let note = cat.outsiderNote {
                     Label(note, systemImage: cat.isExiled ? "figure.walk.departure" : "questionmark.circle.fill")
                         .foregroundStyle(.red)
@@ -37,7 +37,10 @@ struct CatAboutSection: View {
                 }
             }
             if !isOutsider {
-                LabeledContent("Origin", value: cat.origin.rawValue.capitalized)
+                LabeledContent("Backstory", value: model.backstoryLabel(of: cat)?.capitalizedFirst ?? cat.origin.rawValue.capitalized)
+                if let name = model.otherClanName(of: cat) {
+                    LabeledContent("Came from", value: name)
+                }
             }
             LabeledContent("Experience", value: cat.experience, format: .number)
             if cat.isDead, let moon = cat.diedAtClanAge, moon >= 0 {

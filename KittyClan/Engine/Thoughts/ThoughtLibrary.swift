@@ -3,21 +3,26 @@ import Foundation
 /// What a thought needs to know about the Clan: who is an outsider and which group each cat is in.
 struct ThoughtContext {
     let clan: Clan
+    /// Loners, rogues, kittypets and lost or exiled cats; not members of other Clans.
     let outsiderIDs: Set<UUID>
+    /// Living members of neighbouring Clans.
+    let otherClanIDs: Set<UUID>
 
     init(clan: Clan) {
         self.clan = clan
-        outsiderIDs = Set(clan.outsiders.map(\.id))
+        otherClanIDs = Set(clan.outsiders.filter { $0.isAlive && $0.belongsToOtherClan }.map(\.id))
+        outsiderIDs = Set(clan.outsiders.map(\.id)).subtracting(otherClanIDs)
     }
 
-    /// Clangen's `status.rank`: an outsider's is its way of life.
+    /// Clangen's `status.rank`: an outsider's is its way of life; another Clan's cat keeps its rank.
     func status(of cat: Cat) -> String {
-        outsiderIDs.contains(cat.id) ? cat.social.rawValue : cat.rank.rawValue
+        outsiderIDs.contains(cat.id) && !cat.belongsToOtherClan ? cat.social.rawValue : cat.rank.rawValue
     }
 
-    /// Clangen's group: an afterlife for the dead, the player Clan, or none for outsiders.
+    /// Clangen's group: an afterlife for the dead, the player Clan, another Clan, or none for outsiders.
     func group(of cat: Cat) -> String {
         if let afterlife = cat.afterlife, cat.isDead { return afterlife.rawValue }
+        if otherClanIDs.contains(cat.id) { return "other_clan" }
         return outsiderIDs.contains(cat.id) ? "no_group" : "player_clan"
     }
 
@@ -75,11 +80,6 @@ struct ThoughtCatFilter: Sendable {
             currentlyExiled = false
         }
 
-        if let backstories = rest.removeValue(forKey: "backstory") as? [String] {
-            // No KittyClan cat has one of Clangen's life backstories, so only exclusions can pass.
-            guard backstories.allSatisfy({ $0.hasPrefix("-") }) else { return nil }
-        }
-
         guard let base = Constraint(rest) else { return nil }
         self.base = base
         weight += listWeight(base.statuses, 14) + listWeight(base.ages, 7)
@@ -99,7 +99,7 @@ struct ThoughtCatFilter: Sendable {
                 return false
             }
         }
-        if let formerClanCat, cat.isFormerClanCat != formerClanCat { return false }
+        if let formerClanCat, (cat.isFormerClanCat || context.outsiderIDs.contains(cat.id) && cat.leftOtherClan) != formerClanCat { return false }
         if currentlyExiled, !(context.outsiderIDs.contains(cat.id) && cat.isExiled) { return false }
         return true
     }
@@ -232,7 +232,7 @@ struct ThoughtLibrary: Sendable {
             } else if isOutsider {
                 keys = ["while_alive/\(file)", "while_alive/general"]
                 if cat.isExiled { keys.append("while_alive/exiled") }
-                if cat.isFormerClanCat { keys.append("while_alive/former_clancat") }
+                if cat.isFormerClanCat || cat.leftOtherClan { keys.append("while_alive/former_clancat") }
             } else {
                 keys = ["while_alive/\(file)", "while_alive/general", "while_alive/clancat"]
             }

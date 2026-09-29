@@ -11,6 +11,9 @@ struct CatLifeStorySection: View {
         let hasInteractions = story.contains { $0.entry.kind == .interaction }
         let shown = showsInteractions ? story : story.filter { $0.entry.kind != .interaction }
         Section("Life story") {
+            if let backstory = model.profileBackstory(of: cat) {
+                Text(backstory)
+            }
             if hasInteractions {
                 Toggle("Include everyday interactions", isOn: $showsInteractions)
             }

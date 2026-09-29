@@ -110,7 +110,7 @@ struct Cat: Identifiable, Codable, Hashable, Sendable {
     var starClanAffinity = 0
     var darkForestAffinity = 0
     var preventFading = false
-    /// A Clangen backstory key, e.g. `clan_guide3`.
+    /// A Clangen backstory key, e.g. `clanborn` or `clan_guide3`.
     var backstory: String?
     var leaderCeremony: [CeremonyLine] = []
     var murders: [MurderRecord] = []
@@ -124,6 +124,10 @@ struct Cat: Identifiable, Codable, Hashable, Sendable {
     var isLost = false
     var isExiled = false
     var isNear = true
+    /// The neighbouring Clan the cat belongs to, or once belonged to.
+    var otherClan: UUID?
+    /// Set once the cat has left `otherClan`, e.g. a former Clan cat now living as a loner.
+    var leftOtherClan = false
     /// The rank a former Clan cat held before leaving, restored if they return.
     var lastClanRank: Rank?
     /// Ranks the cat has held before, oldest first (Clangen's group history).
@@ -133,6 +137,9 @@ struct Cat: Identifiable, Codable, Hashable, Sendable {
     var isAlive: Bool { !isDead }
 
     var isFormerClanCat: Bool { lastClanRank != nil }
+
+    /// An outsider who is a member of a neighbouring Clan (Clangen's `is_other_clancat`).
+    var belongsToOtherClan: Bool { otherClan != nil && !leftOtherClan }
 
     /// An outsider's way of life: loner, rogue or kittypet.
     var social: Origin { [.loner, .rogue, .kittypet].contains(origin) ? origin : .loner }
@@ -208,6 +215,8 @@ extension Cat {
         isLost = try c.decodeIfPresent(Bool.self, forKey: .isLost) ?? false
         isExiled = try c.decodeIfPresent(Bool.self, forKey: .isExiled) ?? false
         isNear = try c.decodeIfPresent(Bool.self, forKey: .isNear) ?? true
+        otherClan = try c.decodeIfPresent(UUID.self, forKey: .otherClan)
+        leftOtherClan = try c.decodeIfPresent(Bool.self, forKey: .leftOtherClan) ?? false
         lastClanRank = try c.decodeIfPresent(Rank.self, forKey: .lastClanRank)
         pastRanks = try c.decodeIfPresent([Rank].self, forKey: .pastRanks) ?? []
     }

@@ -143,7 +143,7 @@ struct InjuryBlock: Sendable {
 /// Clangen's ceremony, death and misc event text, filtered to the features KittyClan simulates.
 ///
 /// Events are kept only when every key, constraint and text token is understood; anything
-/// else (other Clans, herbs, skills, injuries…) is dropped at load time rather than half-supported.
+/// else is dropped at load time rather than half-supported.
 struct EventLibrary: Sendable {
     private let ceremonies: [String: [Ceremony]]
     private let honors: [String: [String]]
@@ -467,14 +467,16 @@ private struct ShortEvent: Sendable {
         "new_cat", "new_accessory", "future_event",
     ]
 
-    /// New-cat attributes KittyClan can create. Other-Clan cats and Clan-specific backstories aren't supported.
+    /// New-cat attributes KittyClan can create.
     private static func isSupported(_ attribute: String) -> Bool {
         let simple: Set<String> = [
-            "male", "female", "can_birth", "new_name", "old_name", "kittypet", "loner", "rogue",
+            "male", "female", "can_birth", "new_name", "old_name", "kittypet", "loner", "rogue", "clancat", "former clancat",
             "meeting", "exists", "unknown", "dead", "litter",
         ]
         if simple.contains(attribute) { return true }
-        if attribute.hasPrefix("backstory:") { return !attribute.lowercased().contains("clan") }
+        if attribute.hasPrefix("backstory:") {
+            return Backstories.bundled.expand(attribute.dropFirst("backstory:".count).split(separator: ",").map(String.init)) != nil
+        }
         return ["status:", "age:", "parent:", "adoptive:", "mate:"].contains { attribute.hasPrefix($0) }
     }
 
@@ -553,7 +555,7 @@ private struct ShortEvent: Sendable {
         guard changes.count == (json["relationships"] as? [Any])?.count ?? 0 else { return nil }
         let injuries = (json["injury"] as? [[String: Any]] ?? []).compactMap(InjuryBlock.init)
         guard injuries.count == (json["injury"] as? [Any])?.count ?? 0,
-              injuries.allSatisfy({ Set($0.cats).isSubset(of: ["m_c", "r_c"]) })
+              injuries.allSatisfy({ Set($0.cats).isSubset(of: ["m_c", "r_c"] + blocks.indices.map { "n_c:\($0)" }) })
         else { return nil }
 
         id = json["event_id"] as? String ?? ""
@@ -585,6 +587,7 @@ private struct ShortEvent: Sendable {
             if let statuses = c["status"] as? [String], statuses != ["any"] { weight += max(0, 11 - statuses.count) }
             weight += (c["relationship_status"] as? [String])?.count ?? 0
             if let traits = c["trait"] as? [String] { weight += max(0, 54 - traits.count) }
+            if c["backstory"] != nil { weight += 1 }
         }
         self.weight = weight
     }

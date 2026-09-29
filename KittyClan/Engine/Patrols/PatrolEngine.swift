@@ -91,19 +91,19 @@ struct PatrolEngine: Sendable {
         let romance = candidates.filter(\.isRomance)
         let normal = candidates.filter { !$0.isRomance }
         var found: (PatrolEvent, [String: [UUID]])?
-        if let pick = choose(romance, involved: involved, clan: clan, using: &rng), romanceRoll(pick.0, cats: pick.1, clan: clan, using: &rng) {
+        if let pick = choose(romance, involved: involved, otherClan: otherClan?.id, clan: clan, using: &rng), romanceRoll(pick.0, cats: pick.1, clan: clan, using: &rng) {
             found = pick
         }
-        guard let (patrol, patrolCats) = found ?? choose(normal, involved: involved, clan: clan, using: &rng) else { return nil }
+        guard let (patrol, patrolCats) = found ?? choose(normal, involved: involved, otherClan: otherClan?.id, clan: clan, using: &rng) else { return nil }
         involved = patrolCats
-        involved = createCats(for: patrol.slots, involved: involved, in: &clan, using: &rng)
+        involved = createCats(for: patrol.slots, involved: involved, otherClan: otherClan?.id, in: &clan, using: &rng)
 
-        guard let success = chooseOutcome(patrol.success, involved: involved, clan: clan, using: &rng),
-              let fail = chooseOutcome(patrol.fail, involved: involved, clan: clan, using: &rng),
+        guard let success = chooseOutcome(patrol.success, involved: involved, otherClan: otherClan?.id, clan: clan, using: &rng),
+              let fail = chooseOutcome(patrol.fail, involved: involved, otherClan: otherClan?.id, clan: clan, using: &rng),
               let introText = patrol.intro.randomElement(using: &rng)
         else { return nil }
-        let antagSuccess = chooseOutcome(patrol.antagSuccess, involved: involved, clan: clan, using: &rng)
-        let antagFail = chooseOutcome(patrol.antagFail, involved: involved, clan: clan, using: &rng)
+        let antagSuccess = chooseOutcome(patrol.antagSuccess, involved: involved, otherClan: otherClan?.id, clan: clan, using: &rng)
+        let antagFail = chooseOutcome(patrol.antagFail, involved: involved, otherClan: otherClan?.id, clan: clan, using: &rng)
 
         clan.patrolledThisMoon.formUnion(catIDs)
         let art = library.artURL(patrol.art) != nil ? patrol.art : PatrolLibrary.introArt(for: type)
@@ -181,18 +181,18 @@ struct PatrolEngine: Sendable {
 
     // MARK: - Picking events (Clangen's get_valid_event)
 
-    private func choose(_ patrols: [PatrolEvent], involved: [String: [UUID]], clan: Clan, using rng: inout some RandomNumberGenerator) -> (PatrolEvent, [String: [UUID]])? {
+    private func choose(_ patrols: [PatrolEvent], involved: [String: [UUID]], otherClan: UUID?, clan: Clan, using rng: inout some RandomNumberGenerator) -> (PatrolEvent, [String: [UUID]])? {
         pickByFrequency(patrols, frequency: \.frequency, weight: \.weight, using: &rng) { patrol, rng in
             guard generalConstraints(season: patrol.season, required: patrol.requiredCatTypes, tags: patrol.tags, involved: involved, clan: clan) else { return nil }
-            return fill(patrol.slots, rules: patrol.rules, involved: involved, clan: clan, using: &rng).map { (patrol, $0) }
+            return fill(patrol.slots, rules: patrol.rules, involved: involved, otherClan: otherClan, clan: clan, using: &rng).map { (patrol, $0) }
         }
     }
 
-    private func chooseOutcome(_ outcomes: [PatrolOutcome], involved: [String: [UUID]], clan: Clan, using rng: inout some RandomNumberGenerator) -> (outcome: PatrolOutcome, cats: [String: [UUID]])? {
+    private func chooseOutcome(_ outcomes: [PatrolOutcome], involved: [String: [UUID]], otherClan: UUID?, clan: Clan, using rng: inout some RandomNumberGenerator) -> (outcome: PatrolOutcome, cats: [String: [UUID]])? {
         guard !outcomes.isEmpty else { return nil }
         return pickByFrequency(outcomes, frequency: \.frequency, weight: \.weight, using: &rng) { outcome, rng in
             guard generalConstraints(season: outcome.season, required: outcome.requiredCatTypes, tags: outcome.tags, involved: involved, clan: clan) else { return nil }
-            return fill(outcome.slots, rules: outcome.rules, involved: involved, clan: clan, using: &rng).map { (outcome, $0) }
+            return fill(outcome.slots, rules: outcome.rules, involved: involved, otherClan: otherClan, clan: clan, using: &rng).map { (outcome, $0) }
         }
     }
 
@@ -236,7 +236,7 @@ struct PatrolEngine: Sendable {
     }
 
     /// Clangen's `find_cats`: fills each slot from the patrol (or outsiders for `n_c`), checking relationships.
-    private func fill(_ slots: [PatrolSlot], rules: [RelationshipRule], involved: [String: [UUID]], clan: Clan, using rng: inout some RandomNumberGenerator) -> [String: [UUID]]? {
+    private func fill(_ slots: [PatrolSlot], rules: [RelationshipRule], involved: [String: [UUID]], otherClan: UUID?, clan: Clan, using rng: inout some RandomNumberGenerator) -> [String: [UUID]]? {
         guard rules.allSatisfy({ $0.holds(involved, clan, partial: true) }) else { return nil }
         var cats = involved
         let patrol = involved["patrol_cats"] ?? []
@@ -266,7 +266,7 @@ struct PatrolEngine: Sendable {
 
             let fitting = candidates.shuffled(using: &rng).filter { id in
                 guard let cat = clan[id] else { return false }
-                return slot.matches(cat, isOutsider: clan.outsiders.contains { $0.id == id })
+                return slot.matches(cat, isOutsider: clan.outsiders.contains { $0.id == id }, otherClan: otherClan)
             }
             let chosen = fitting.first { id in
                 var trial = cats
@@ -283,25 +283,53 @@ struct PatrolEngine: Sendable {
         return rules.allSatisfy({ $0.holds(cats, clan, partial: true) }) ? cats : nil
     }
 
-    /// Creates outsiders for `n_c` slots that couldn't be filled by a cat the Clan already knows.
-    private func createCats(for slots: [PatrolSlot], involved: [String: [UUID]], in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [String: [UUID]] {
+    /// Clangen's `updated_create_new_cat`: creates outsiders (or the neighbouring Clan's cats) for
+    /// `n_c` slots that couldn't be filled by a cat the Clan already knows.
+    private func createCats(for slots: [PatrolSlot], involved: [String: [UUID]], otherClan: UUID?, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [String: [UUID]] {
         var involved = involved
+        let backstories = Backstories.bundled
         for slot in slots where involved[slot.abbr] == nil {
             guard let spec = slot.create else { continue }
-            let origin = Cat.Origin(rawValue: spec.status ?? "") ?? .loner
+            func cats(_ abbrs: [String]) -> [UUID] { abbrs.flatMap { involved[$0] ?? [] } }
+            let mates = cats(spec.mates).compactMap { clan[$0] }
+            var age = mates.map(\.age).randomElement(using: &rng) ?? spec.ages.compactMap(CatAge.init).randomElement(using: &rng)
+            if spec.litter, age.map({ $0 != .newborn && $0 != .kitten }) ?? true { age = nil }
+
+            var social: NewCatSocial
+            if let status = spec.status, let known = NewCatSocial(rawValue: status) {
+                social = known
+            } else if let story = spec.backstories.first, let implied = backstories.social(of: story) {
+                social = implied
+            } else if age == nil, !spec.litter {
+                social = Bool.random(using: &rng) ? .clancat : pick([.loner, .rogue, .kittypet], &rng)
+            } else {
+                social = .loner
+            }
+            let group = social == .clancat || slot.wasClanCat == true ? otherClan ?? clan.otherClans.randomElement(using: &rng)?.id : nil
+            if group == nil, social == .clancat { social = .loner }
+            let origin: Cat.Origin = social == .clancat ? .clanborn : social.origin ?? .loner
+            let blood = cats(spec.bloodParents).prefix(2)
+            let adoptive = cats(spec.adoptiveParents).filter { !blood.contains($0) }
+
             var made: [Cat] = []
             if spec.litter {
-                let moons = Int.random(in: 0...5, using: &rng)
+                let moons = age == .newborn ? 0 : age == .kitten ? Int.random(in: 1...5, using: &rng) : Int.random(in: 0...5, using: &rng)
                 for _ in 0..<Int.random(in: 2...6, using: &rng) {
                     var kit = engine.factory.make(rank: moons == 0 ? .newborn : .kitten, moons: moons, origin: origin, using: &rng)
                     engine.factory.maybeCollar(&kit, using: &rng)
                     made.append(kit)
                 }
             } else {
-                let age = spec.ages.compactMap(CatAge.init).randomElement(using: &rng) ?? .adult
+                let age = age ?? (social == .clancat ? Self.otherClanAge(using: &rng) : .adult)
                 let sex = spec.genders.compactMap(Cat.Sex.init).randomElement(using: &rng)
-                var cat = engine.factory.makeJoiner(origin: origin, sex: sex, using: &rng)
-                cat.moons = Int.random(in: min(age.moons.lowerBound, 300)...min(age.moons.upperBound, 300), using: &rng)
+                let moons = Int.random(in: min(age.moons.lowerBound, 300)...min(age.moons.upperBound, 300), using: &rng)
+                var cat: Cat
+                if social == .clancat {
+                    cat = engine.factory.make(rank: MoonEngine.rankForAge(age), moons: moons, origin: origin, sex: sex, using: &rng)
+                } else {
+                    cat = engine.factory.makeJoiner(origin: origin, sex: sex, using: &rng)
+                    cat.moons = moons
+                }
                 if let (path, tier) = spec.skills.randomElement(using: &rng).flatMap(CatSkills.requirement) {
                     let t = max(tier, 1)
                     cat.skills.primary = Skill(
@@ -311,10 +339,41 @@ struct PatrolEngine: Sendable {
                 }
                 made.append(cat)
             }
+            for i in made.indices {
+                let baby = made[i].age == .newborn || made[i].age == .kitten
+                made[i].backstory = spec.backstories.randomElement(using: &rng) ?? Self.backstory(for: social, baby: baby, using: &rng)
+                made[i].otherClan = group
+                made[i].leftOtherClan = group != nil && social != .clancat
+                made[i].parents = Array(blood)
+                made[i].adoptiveParents = adoptive
+                for mate in mates {
+                    made[i].mates.append(mate.id)
+                    if let j = clan.index(of: mate.id) {
+                        clan.cats[j].mates.append(made[i].id)
+                    } else if let j = clan.outsiders.firstIndex(where: { $0.id == mate.id }) {
+                        clan.outsiders[j].mates.append(made[i].id)
+                    }
+                }
+            }
             clan.outsiders += made
             involved[slot.abbr] = made.map(\.id)
         }
         return involved
+    }
+
+    /// Clangen's `_assign_backstory` for a patrol's new cat with no backstory given.
+    private static func backstory(for social: NewCatSocial, baby: Bool, using rng: inout some RandomNumberGenerator) -> String {
+        let category = switch social {
+        case .clancat, .formerClancat: baby ? "baby_clancat_backstories" : "former_clancat_backstories"
+        default: (baby ? "baby_" : "") + social.rawValue + "_backstories"
+        }
+        return Backstories.bundled.random(from: category, using: &rng) ?? "outsider1"
+    }
+
+    /// An age for another Clan's cat with no age or rank given: any rank but leader or deputy.
+    private static func otherClanAge(using rng: inout some RandomNumberGenerator) -> CatAge {
+        let rank = pick([Rank.kitten, .apprentice, .medicineApprentice, .mediatorApprentice, .warrior, .medicineCat, .mediator, .elder], &rng)
+        return CatAge(moons: CatFactory.randomMoons(for: rank, using: &rng))
     }
 
     // MARK: - Finishing a patrol
@@ -333,7 +392,7 @@ struct PatrolEngine: Sendable {
         let (outcome, outcomeCats) = succeeded ? successOutcome : failOutcome
 
         var cats = session.involved.merging(outcomeCats) { _, new in new }
-        cats = createCats(for: outcome.slots, involved: cats, in: &clan, using: &rng)
+        cats = createCats(for: outcome.slots, involved: cats, otherClan: session.otherClan, in: &clan, using: &rng)
         let text = resolve(outcome.strings.randomElement(using: &rng) ?? "", cats, clan: clan, otherClan: session.otherClan, using: &rng)
 
         var results: [String] = []
@@ -405,6 +464,7 @@ struct PatrolEngine: Sendable {
             for id in targets(block.cats, cats) {
                 guard let index = clan.outsiders.firstIndex(where: { $0.id == id }) else { continue }
                 var cat = clan.outsiders.remove(at: index)
+                if cat.otherClan != nil { cat.leftOtherClan = true }
                 if let status = block.statuses.compactMap(Rank.init).randomElement(using: &rng) {
                     cat.rank = status
                 } else {
