@@ -4,7 +4,7 @@ import SwiftUI
 struct CatCeremonySection: View {
     @Environment(AppModel.self) private var model
     let cat: Cat
-    @State private var isExpanded = Self.expandsByDefault
+    @Binding var isExpanded: Bool
 
     var body: some View {
         let paragraphs = model.ceremony(of: cat)
@@ -23,7 +23,7 @@ struct CatCeremonySection: View {
         }
     }
 
-    private static var expandsByDefault: Bool {
+    static var expandsByDefault: Bool {
         #if DEBUG
         UserDefaults.standard.string(forKey: "detailSection") == DetailSection.ceremony.rawValue
         #else

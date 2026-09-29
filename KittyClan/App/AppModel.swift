@@ -199,6 +199,123 @@ final class AppModel {
         await save()
     }
 
+    // MARK: - Player controls
+
+    /// Whether this is a living member of the Clan, who can have their role, mentor and mate changed.
+    func isLivingClanCat(_ cat: Cat) -> Bool {
+        clan?.isAlive(cat.id) ?? false
+    }
+
+    func roleTargets(for cat: Cat) -> [Rank] {
+        guard let clan, clan.isAlive(cat.id) else { return [] }
+        return cat.rank.manualTargets(leaderVacant: clan.leaderVacant, deputyVacant: clan.deputyVacant)
+    }
+
+    /// Changes a living cat's role. Making a leader also holds their nine-lives ceremony.
+    @discardableResult
+    func changeRank(_ rank: Rank, for id: Cat.ID) async -> Bool {
+        guard let assets, let current = clan, !isAdvancing else { return false }
+        isAdvancing = true
+        defer { isAdvancing = false }
+        let (updated, changed) = await Self.changeRank(rank, for: id, in: current, engine: assets.engine)
+        guard changed else { return false }
+        clan = updated
+        rollCamp()
+        await save()
+        return true
+    }
+
+    func mentorCandidates(for cat: Cat, noCurrentApprentices: Bool, noFormerApprentices: Bool) -> [Cat] {
+        guard let clan else { return [] }
+        return MoonEngine.mentorCandidates(
+            for: cat.id, in: clan, noCurrentApprentices: noCurrentApprentices, noFormerApprentices: noFormerApprentices
+        )
+    }
+
+    /// Gives an apprentice a new mentor, or none until the next moon picks one.
+    func setMentor(_ mentorID: Cat.ID?, for id: Cat.ID) async {
+        guard var current = clan, current.isAlive(id), !isAdvancing else { return }
+        MoonEngine.setMentor(mentorID, for: id, in: &current)
+        clan = current
+        await save()
+    }
+
+    func canChooseMate(_ cat: Cat) -> Bool {
+        isLivingClanCat(cat) && cat.moons >= 12
+    }
+
+    func mateCandidates(for cat: Cat, singleOnly: Bool, kitsOnly: Bool) -> [Cat] {
+        clan?.mateCandidates(for: cat.id, singleOnly: singleOnly, kitsOnly: kitsOnly) ?? []
+    }
+
+    /// Clangen's romance hearts, 0 to 3, for how one cat feels about another.
+    func romanceHearts(from: Cat.ID, to: Cat.ID) -> Int {
+        switch clan?.relationship(from: from, to: to)?[.romance] ?? 0 {
+        case 81...: 3
+        case 31...: 2
+        case 10...: 1
+        default: 0
+        }
+    }
+
+    func setMates(_ a: Cat.ID, _ b: Cat.ID) async {
+        guard let assets, var current = clan, let relationships = assets.engine.relationships,
+              let first = current[a], let second = current[b], current.canChooseMate(first, second), !isAdvancing
+        else { return }
+        relationships.setMates(a, b, in: &current)
+        clan = current
+        await save()
+    }
+
+    func breakUp(_ a: Cat.ID, _ b: Cat.ID) async {
+        guard let assets, let current = clan, current[a]?.mates.contains(b) == true, !isAdvancing else { return }
+        isAdvancing = true
+        defer { isAdvancing = false }
+        clan = await Self.breakUp(a, b, in: current, engine: assets.engine)
+        await save()
+    }
+
+    func canRename(_ cat: Cat) -> Bool {
+        !isOutsider(cat)
+    }
+
+    /// The rank ending ("kit", "paw" or "star") a cat's name shows instead of its suffix.
+    func specialSuffix(for cat: Cat) -> String? {
+        assets?.names.specialSuffix(for: cat.rank)
+    }
+
+    /// A fresh name for this cat's looks, for its prefix or suffix.
+    func randomName(for cat: Cat) -> CatName? {
+        var rng = SystemRandomNumberGenerator()
+        return assets?.names.generate(for: cat.appearance, using: &rng)
+    }
+
+    /// The name the cat would show after `rename`, cleaned up the same way.
+    func previewName(of cat: Cat, prefix: String, suffix: String, hideSpecialSuffix: Bool) -> String {
+        guard let assets, var preview = clan else { return displayName(cat) }
+        preview.rename(cat.id, prefix: prefix, suffix: suffix, hideSpecialSuffix: hideSpecialSuffix, names: assets.names)
+        return preview[cat.id].map(displayName) ?? displayName(cat)
+    }
+
+    @discardableResult
+    func rename(_ id: Cat.ID, prefix: String, suffix: String, hideSpecialSuffix: Bool) async -> Bool {
+        guard let assets, var current = clan, !current.isOutsider(id), !isAdvancing else { return false }
+        let changed = current.rename(id, prefix: prefix, suffix: suffix, hideSpecialSuffix: hideSpecialSuffix, names: assets.names)
+        clan = current
+        await save()
+        return changed
+    }
+
+    /// The cat's current thought, e.g. "Is watching over the kits".
+    func thought(of cat: Cat) -> String? {
+        guard let clan else { return nil }
+        return assets?.thought(of: cat, in: clan)
+    }
+
+    func family(of cat: Cat) -> [Kin] {
+        clan?.family(of: cat.id) ?? []
+    }
+
     // MARK: - Afterlife
 
     func showAfterlife() {
@@ -433,6 +550,24 @@ final class AppModel {
         var clan = clan
         var rng = SystemRandomNumberGenerator()
         engine.exileCat(id, in: &clan, using: &rng)
+        engine.refreshThought(.onExile, for: id, in: &clan, using: &rng)
+        return clan
+    }
+
+    @concurrent
+    private static func changeRank(_ rank: Rank, for id: Cat.ID, in clan: Clan, engine: MoonEngine) async -> (Clan, Bool) {
+        var clan = clan
+        var rng = SystemRandomNumberGenerator()
+        let changed = engine.changeRank(rank, for: id, in: &clan, using: &rng)
+        if changed { engine.refreshThought(.onRankChange, for: id, in: &clan, using: &rng) }
+        return (clan, changed)
+    }
+
+    @concurrent
+    private static func breakUp(_ a: Cat.ID, _ b: Cat.ID, in clan: Clan, engine: MoonEngine) async -> Clan {
+        var clan = clan
+        var rng = SystemRandomNumberGenerator()
+        engine.relationships?.breakUp(a, b, in: &clan, using: &rng)
         return clan
     }
 
@@ -588,13 +723,15 @@ extension AppModel {
     }
 
     /// `-showCat first` opens the leader; `-showCat guide` opens the guide; `-showCat dead` opens the most recently dead Clan cat;
-    /// `-showCat outsider` opens the first nearby outsider; `-showCat sick` opens the cat with the most known conditions; any other value opens the first cat whose name starts with it.
+    /// `-showCat outsider` opens the first nearby outsider; `-showCat sick` opens the cat with the most known conditions; `-showCat apprentice` the first apprentice; `-showCat family` the living cat with the most relatives; any other value opens the first cat whose name starts with it.
     var debugCatToShow: Cat? {
         guard let query = UserDefaults.standard.string(forKey: "showCat"), let clan else { return nil }
         if query == "first" { return clan[clan.leader] ?? clan.living.first }
         if query == "outsider" { return nearbyOutsiders.first }
         if query == "guide" { return clan[clan.guide] }
         if query == "dead" { return clan.dead.last { $0.id != clan.guide } }
+        if query == "apprentice" { return clan.living.first { $0.rank.isApprentice } }
+        if query == "family" { return clan.living.max { clan.family(of: $0.id).count < clan.family(of: $1.id).count } }
         if query == "sick" {
             return clan.living.max { $0.visibleConditions.count < $1.visibleConditions.count }
         }

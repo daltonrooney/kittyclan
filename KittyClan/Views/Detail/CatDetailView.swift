@@ -4,6 +4,11 @@ struct CatDetailView: View {
     @Environment(AppModel.self) private var model
     let catID: Cat.ID
 
+    @State private var action: CatAction?
+    @State private var isShowingFamilyTree = false
+    @State private var isCeremonyExpanded = CatCeremonySection.expandsByDefault
+    @State private var wantsCeremony = false
+
     var body: some View {
         if let cat = model.cat(catID) {
             let isOutsider = model.isOutsider(cat)
@@ -16,24 +21,39 @@ struct CatDetailView: View {
                         .grayscale(cat.isDead && cat.afterlife == nil ? 0.7 : 0)
                         .accessibilityLabel("\(model.displayName(cat)), \(cat.age.label)")
                         .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    if let thought = model.thought(of: cat) {
+                        Text("\u{201C}\(thought)\u{201D}")
+                            .font(.title3)
+                            .italic()
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .accessibilityLabel("Thinking: \(thought)")
+                    }
                 }
                 if cat.isDead {
                     CatAfterlifeSection(cat: cat)
                         .id(DetailSection.afterlife)
                 }
                 if model.isLeader(cat) {
-                    CatCeremonySection(cat: cat)
+                    CatCeremonySection(cat: cat, isExpanded: $isCeremonyExpanded)
                         .id(DetailSection.ceremony)
                 }
                 CatAgesSection(cat: cat)
                 CatAboutSection(cat: cat, isOutsider: isOutsider)
+                CatActionsSection(cat: cat, open: open)
+                    .id(DetailSection.actions)
                 if cat.isDead {
                     CatDeathHistorySection(cat: cat)
                         .id(DetailSection.history)
                 } else {
                     CatHealthSection(cat: cat)
                 }
-                CatFamilySection(cat: cat)
+                CatFamilySection(cat: cat, showFamilyTree: showFamilyTree)
+                    .id(DetailSection.family)
                 if !isOutsider, cat.isAlive {
                     CatRelationshipsSection(cat: cat)
                         .id(DetailSection.relationships)
@@ -48,9 +68,21 @@ struct CatDetailView: View {
                         .id(DetailSection.exile)
                 }
             }
+            .sheet(item: $action) {
+                if wantsCeremony {
+                    wantsCeremony = false
+                    isCeremonyExpanded = true
+                    withAnimation { proxy.scrollTo(DetailSection.ceremony, anchor: .top) }
+                }
+            } content: { action in
+                sheet(action, for: cat)
+            }
             #if DEBUG
-            .task { scrollToDebugSection(proxy) }
+            .task { applyDebugArguments(proxy) }
             #endif
+            }
+            .navigationDestination(isPresented: $isShowingFamilyTree) {
+                FamilyTreeView(catID: catID)
             }
             .navigationTitle(cat.isDead ? "\(model.displayName(cat)) (dead)" : model.displayName(cat))
             .toolbarTitleDisplayMode(.inline)
@@ -59,12 +91,41 @@ struct CatDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private func sheet(_ action: CatAction, for cat: Cat) -> some View {
+        switch action {
+        case .role: RoleSheet(cat: cat) { wantsCeremony = true }
+        case .mentor: MentorSheet(cat: cat)
+        case .mate: MateSheet(cat: cat)
+        case .rename: RenameSheet(cat: cat)
+        }
+    }
+
+    private func open(_ action: CatAction) {
+        self.action = action
+    }
+
+    private func showFamilyTree() {
+        isShowingFamilyTree = true
+    }
+
     #if DEBUG
-    /// `-detailSection afterlife|history|ceremony|relationships|lifeStory|exile` scrolls the detail sheet for screenshots.
-    private func scrollToDebugSection(_ proxy: ScrollViewProxy) {
-        guard let name = UserDefaults.standard.string(forKey: "detailSection"),
-              let section = DetailSection(rawValue: name) else { return }
-        proxy.scrollTo(section, anchor: .top)
+    @MainActor private static var didApplyDebugArguments = false
+
+    /// `-detailSection afterlife|history|ceremony|actions|family|relationships|lifeStory|exile` scrolls the detail sheet for screenshots;
+    /// `-sheet role|mentor|mate|rename|family` opens a control once.
+    private func applyDebugArguments(_ proxy: ScrollViewProxy) {
+        let defaults = UserDefaults.standard
+        if let name = defaults.string(forKey: "detailSection"), let section = DetailSection(rawValue: name) {
+            proxy.scrollTo(section, anchor: .top)
+        }
+        guard !Self.didApplyDebugArguments, let sheet = defaults.string(forKey: "sheet") else { return }
+        Self.didApplyDebugArguments = true
+        if sheet == "family" {
+            isShowingFamilyTree = true
+        } else {
+            action = CatAction(rawValue: sheet)
+        }
     }
     #endif
 }
