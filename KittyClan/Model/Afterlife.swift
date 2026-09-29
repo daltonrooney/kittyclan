@@ -43,7 +43,7 @@ struct CeremonyLine: Codable, Hashable, Sendable {
 struct FadedCat: Codable, Hashable, Sendable, Identifiable {
     let id: UUID
     var name: CatName
-    var pronouns: Pronouns
+    var pronouns: [PronounSet]
     var rank: Rank
     var moons: Int
     var deadFor: Int
@@ -58,7 +58,7 @@ extension FadedCat {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
         name = try c.decode(CatName.self, forKey: .name)
-        pronouns = try c.decode(Pronouns.self, forKey: .pronouns)
+        pronouns = try c.decodePronouns(forKey: .pronouns)
         rank = try c.decode(Rank.self, forKey: .rank)
         moons = try c.decode(Int.self, forKey: .moons)
         deadFor = try c.decode(Int.self, forKey: .deadFor)

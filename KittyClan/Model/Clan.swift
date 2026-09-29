@@ -107,6 +107,12 @@ struct Clan: Codable, Sendable {
     var allowMurder = true
     /// Clangen's `same sex adoption` setting: mates who can't have kits together may find a litter to adopt.
     var sameSexAdoption = false
+    /// Clangen's `they them default` setting: new cats use they/them whatever their gender.
+    var theyThemDefault = false
+    /// Pronoun sets the player made, offered for every cat.
+    var customPronouns: [PronounSet] = []
+    /// Clangen's points of interest the Clan knows, e.g. "moon_pool" and "terrain_lake".
+    var pointsOfInterest: [String] = []
 
     var displayName: String { prefix + "Clan" }
 
@@ -162,6 +168,11 @@ struct Clan: Codable, Sendable {
     mutating func updateRelationship(from: UUID, to: UUID, _ body: (inout Relationship) -> Void) {
         guard from != to else { return }
         body(&relationships[from, default: [:]][to, default: Relationship()])
+    }
+
+    /// Clangen's `get_new_pronouns`: the identity's usual set, or they/them when that's the default.
+    func newPronouns(for gender: GenderAlign) -> [PronounSet] {
+        [theyThemDefault ? .they : gender.defaultPronouns]
     }
 
     /// Blood and adoptive ancestors up to grandparents, plus the cat itself.
@@ -221,5 +232,8 @@ extension Clan {
         pendingEvents = try c.decodeIfPresent([PendingEvent].self, forKey: .pendingEvents) ?? []
         allowMurder = try c.decodeIfPresent(Bool.self, forKey: .allowMurder) ?? true
         sameSexAdoption = try c.decodeIfPresent(Bool.self, forKey: .sameSexAdoption) ?? false
+        theyThemDefault = try c.decodeIfPresent(Bool.self, forKey: .theyThemDefault) ?? false
+        customPronouns = try c.decodeIfPresent([PronounSet].self, forKey: .customPronouns) ?? []
+        pointsOfInterest = try c.decodeIfPresent([String].self, forKey: .pointsOfInterest) ?? []
     }
 }

@@ -41,12 +41,15 @@ struct CatFactory: Sendable {
         }
     }
 
-    /// - Parameter sex: Clangen's gender override; random when nil.
+    /// - Parameters:
+    ///   - sex: Clangen's gender override; random when nil.
+    ///   - theyThem: Clangen's `they them default` setting.
     func make(
         rank: Rank,
         moons: Int? = nil,
         origin: Cat.Origin = .founder,
         sex: Cat.Sex? = nil,
+        theyThem: Bool = false,
         using rng: inout some RandomNumberGenerator
     ) -> Cat {
         let moons = moons ?? Self.randomMoons(for: rank, using: &rng)
@@ -62,7 +65,7 @@ struct CatFactory: Sendable {
             name: name,
             sex: sex,
             genderAlign: gender,
-            pronouns: gender.defaultPronouns,
+            pronouns: [theyThem ? .they : gender.defaultPronouns],
             moons: moons,
             appearance: looks,
             personality: traits.random(kit: baby, using: &rng),
@@ -74,7 +77,7 @@ struct CatFactory: Sendable {
     }
 
     /// A newborn whose looks are inherited from its parents.
-    func makeKit(mother: Cat, father: Cat, using rng: inout some RandomNumberGenerator) -> Cat {
+    func makeKit(mother: Cat, father: Cat, theyThem: Bool = false, using rng: inout some RandomNumberGenerator) -> Cat {
         let sex: Cat.Sex = Bool.random(using: &rng) ? .female : .male
         let looks = appearance.generate(
             female: sex == .female, age: .newborn,
@@ -85,7 +88,7 @@ struct CatFactory: Sendable {
             name: names.generate(for: looks, using: &rng),
             sex: sex,
             genderAlign: .cis(sex),
-            pronouns: GenderAlign.cis(sex).defaultPronouns,
+            pronouns: [theyThem ? .they : GenderAlign.cis(sex).defaultPronouns],
             moons: 0,
             appearance: looks,
             personality: traits.random(kit: true, using: &rng),
@@ -96,8 +99,8 @@ struct CatFactory: Sendable {
     }
 
     /// A loner, rogue or kittypet who asks to join. Half keep their outsider name.
-    func makeJoiner(origin: Cat.Origin, sex: Cat.Sex? = nil, using rng: inout some RandomNumberGenerator) -> Cat {
-        var cat = make(rank: .warrior, moons: Int.random(in: 23...120, using: &rng), origin: origin, sex: sex, using: &rng)
+    func makeJoiner(origin: Cat.Origin, sex: Cat.Sex? = nil, theyThem: Bool = false, using rng: inout some RandomNumberGenerator) -> Cat {
+        var cat = make(rank: .warrior, moons: Int.random(in: 23...120, using: &rng), origin: origin, sex: sex, theyThem: theyThem, using: &rng)
         if Bool.random(using: &rng) {
             cat.name = names.outsiderName(for: origin, using: &rng)
         }

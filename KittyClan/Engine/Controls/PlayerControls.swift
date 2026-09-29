@@ -134,14 +134,27 @@ extension Clan {
     }
 
     /// Clangen's ChangeGenderScreen: letters, digits and spaces only. Returns false for an
-    /// outsider or an empty identity.
+    /// outsider, an empty identity or no pronoun sets.
     @discardableResult
-    mutating func setGender(_ id: UUID, genderAlign: GenderAlign, pronouns: Pronouns) -> Bool {
+    mutating func setGender(_ id: UUID, genderAlign: GenderAlign, pronouns: [PronounSet]) -> Bool {
         let cleaned = String(genderAlign.rawValue.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) || $0 == " " })
             .trimmingCharacters(in: .whitespaces)
-        guard let i = index(of: id), !cleaned.isEmpty else { return false }
+        let sets = pronouns.reduce(into: [PronounSet]()) { if !$0.contains($1) { $0.append($1) } }
+        guard let i = index(of: id), !cleaned.isEmpty, !sets.isEmpty else { return false }
         cats[i].genderAlign = GenderAlign(rawValue: cleaned)
-        cats[i].pronouns = pronouns
+        cats[i].pronouns = sets
+        return true
+    }
+
+    /// Clangen's PronounCreationWindow: a set with every word filled in, saved for the whole Clan.
+    @discardableResult
+    mutating func addCustomPronouns(_ set: PronounSet) -> Bool {
+        let words = [set.subject, set.object, set.poss, set.inposs, set.reflexive]
+        guard words.allSatisfy({ !$0.trimmingCharacters(in: .whitespaces).isEmpty }),
+              (1...2).contains(set.conju), (0...2).contains(set.gender),
+              !PronounSet.builtIn.contains(set), !customPronouns.contains(set)
+        else { return false }
+        customPronouns.append(set)
         return true
     }
 }

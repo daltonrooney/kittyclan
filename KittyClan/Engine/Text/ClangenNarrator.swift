@@ -9,7 +9,7 @@ struct ClangenNarrator: Narrator {
     func text(for event: MoonEvent, in clan: Clan, using rng: inout some RandomNumberGenerator) -> String {
         switch event {
         case .story(let pick, _):
-            return resolve(pick, in: clan)
+            return resolve(pick, in: clan, using: &rng)
         case .apprenticed(let id, _, let oldName), .graduated(let id, let oldName), .becameLeader(let id, let oldName),
              .becameMediator(let id, let oldName):
             return ceremony(for: id, oldName: oldName, in: clan, using: &rng) ?? fallback.text(for: event, in: clan, using: &rng)
@@ -21,12 +21,12 @@ struct ClangenNarrator: Narrator {
             var cats = ["m_c": cat]
             if let mate = cat.mates.compactMap({ clan[$0] }).first { cats["r_c"] = mate }
             else if line.contains("r_c") { break }
-            return template.resolve(line, cats: cats, clan: clan)
+            return template.resolve(line, cats: cats, clan: clan, using: &rng)
         case .born(let mother, let father, let kits):
             guard let cat = clan[mother], let mate = clan[father],
                   let line = library.twoParentBirths.randomElement(using: &rng)
             else { break }
-            return template.resolve(line.replacing("{insert}", with: kitAmount(kits.count)), cats: ["m_c": cat, "r_c": mate], clan: clan)
+            return template.resolve(line.replacing("{insert}", with: kitAmount(kits.count)), cats: ["m_c": cat, "r_c": mate], clan: clan, using: &rng)
         case .adopted(let parents, let kits):
             let adults = parents.compactMap { clan[$0] }
             guard !adults.isEmpty else { break }
@@ -48,10 +48,10 @@ struct ClangenNarrator: Narrator {
     private func ceremony(for id: UUID, oldName: String, in clan: Clan, using rng: inout some RandomNumberGenerator) -> String? {
         guard let cat = clan[id], let pick = library.ceremony(for: cat, in: clan, using: &rng) else { return nil }
         let extras = ["r_h": library.honor(for: cat, using: &rng), "(old_name)": oldName]
-        return resolve(pick, in: clan, extras: extras)
+        return resolve(pick, in: clan, extras: extras, using: &rng)
     }
 
-    private func resolve(_ pick: StoryPick, in clan: Clan, extras: [String: String] = [:]) -> String {
+    private func resolve(_ pick: StoryPick, in clan: Clan, extras: [String: String] = [:], using rng: inout some RandomNumberGenerator) -> String {
         let cats = pick.cats.compactMapValues { clan[$0] }
         var extras = extras
         for (abbr, ids) in pick.groupCats {
@@ -61,6 +61,6 @@ struct ClangenNarrator: Narrator {
                 extras["n_c_pre:" + abbr.dropFirst(4)] = first.name.prefix
             }
         }
-        return template.resolve(pick.template, cats: cats, clan: clan, otherClan: clan.otherClan(pick.otherClan)?.name, extras: extras)
+        return template.resolve(pick.template, cats: cats, clan: clan, otherClan: clan.otherClan(pick.otherClan)?.name, extras: extras, using: &rng)
     }
 }

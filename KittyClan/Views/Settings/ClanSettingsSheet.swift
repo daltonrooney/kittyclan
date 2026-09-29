@@ -41,6 +41,13 @@ struct ClanSettingsSheet: View {
                         toggle("Same-sex mates adopt kits", systemImage: "figure.and.child.holdinghands", option: \.sameSexAdoption)
                     }
                     Section {
+                        toggle("Use they/them by default", systemImage: "person.fill.questionmark", option: \.theyThemDefault)
+                    } header: {
+                        Text("Pronouns")
+                    } footer: {
+                        Text("New cats get they/them pronouns whatever their gender. Cats who already live here keep theirs.")
+                    }
+                    Section {
                         toggle("Murders can happen", systemImage: "drop.fill", option: \.allowMurder)
                     } header: {
                         Text("Darker events")

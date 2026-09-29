@@ -72,6 +72,7 @@ struct ClanFounding: Sendable {
         clan.canStarve = canStarve
         clan.herbs = engine.startingHerbs(clanSize: clan.living.count, using: &rng)
         clan.otherClans = engine.generateOtherClans(for: clan, using: &rng)
+        clan.ensurePointsOfInterest(engine.library?.places, using: &rng)
         if preyAndHerbs {
             clan.freshKill.add(FreshKillPile.startingAmount)
             engine.updateNutrition(in: &clan)

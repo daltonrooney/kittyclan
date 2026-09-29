@@ -152,10 +152,11 @@ struct PatrolOutcome: Sendable {
     let tags: [String]
     let season: [String]
     let art: String?
+    let poi: PoiRequirement?
     let weight: Int
 
     private static let keys: Set<String> = [
-        "strings", "frequency", "exp_gained", "relationship_changes", "involved_cats", "supply", "outcome_art",
+        "poi", "strings", "frequency", "exp_gained", "relationship_changes", "involved_cats", "supply", "outcome_art",
         "outcome_art_clean", "reputation_changes", "condition", "required_cat_types", "death", "meet", "join",
         "location", "lost", "relationship_constraint", "tags", "season", "patrol_temperament",
     ]
@@ -169,7 +170,8 @@ struct PatrolOutcome: Sendable {
             slots.append(slot)
         }
         self.slots = slots.sorted { $0.abbr < $1.abbr }
-        let allowed = patrolSlots.union(slots.map(\.abbr))
+        poi = PoiRequirement(json["poi"] as? [String: Any])
+        let allowed = patrolSlots.union(slots.map(\.abbr) + (poi == nil ? [] : ["POI"]))
         strings = (json["strings"] as? [String] ?? []).filter { PatrolLibrary.textIsSupported($0, abbreviations: allowed) }
         guard !strings.isEmpty else { return nil }
 
@@ -217,7 +219,7 @@ struct PatrolOutcome: Sendable {
         if !season.isEmpty, !season.contains("any") { weight += 4 * max(0, 4 - season.count) }
         weight += 2 * tags.count + slots.reduce(0) { $0 + $1.weight }
         if !rules.isEmpty { weight += 20 }
-        weight += 5 * requiredCatTypes.count
+        weight += 5 * requiredCatTypes.count + (poi?.weight ?? 0)
         self.weight = max(weight, 1)
     }
 }
@@ -240,6 +242,7 @@ struct PatrolEvent: Sendable {
     let antagSuccess: [PatrolOutcome]
     let antagFail: [PatrolOutcome]
     let location: [String]
+    let poi: PoiRequirement?
     let weight: Int
     /// The prey size most success outcomes bring home, used to balance hunts by season.
     let dominantPrey: String?
@@ -248,7 +251,7 @@ struct PatrolEvent: Sendable {
     var givesHerbs: Bool { (success + fail).contains { !$0.herbs.isEmpty } }
 
     private static let keys: Set<String> = [
-        "event_id", "types", "location", "season", "tags", "patrol_art", "patrol_art_clean", "required_cat_types",
+        "event_id", "poi", "types", "location", "season", "tags", "patrol_art", "patrol_art_clean", "required_cat_types",
         "frequency", "chance_of_success", "involved_cats", "relationship_constraint", "patrol_temperament",
         "intro_strings", "decline_strings", "success_outcomes", "fail_outcomes", "antag_success_outcomes", "antag_fail_outcomes",
     ]
@@ -272,7 +275,8 @@ struct PatrolEvent: Sendable {
         tags = json["tags"] as? [String] ?? []
         guard tags.allSatisfy(PatrolLibrary.isSupportedTag) else { return nil }
 
-        let slotNames = Set(["p_l"] + slots.map(\.abbr))
+        poi = PoiRequirement(json["poi"] as? [String: Any])
+        let slotNames = Set(["p_l"] + slots.map(\.abbr) + (poi == nil ? [] : ["POI"]))
         intro = (json["intro_strings"] as? [String] ?? []).filter { PatrolLibrary.textIsSupported($0, abbreviations: slotNames) }
         decline = (json["decline_strings"] as? [String] ?? []).filter { PatrolLibrary.textIsSupported($0, abbreviations: slotNames) }
         func outcomes(_ key: String) -> [PatrolOutcome] {
@@ -303,7 +307,7 @@ struct PatrolEvent: Sendable {
         if !season.isEmpty, !season.contains("any") { weight += 2 * max(0, 4 - season.count) }
         if !location.isEmpty, !location.contains("any") { weight += 2 * max(0, 6 - location.count) }
         weight += 2 * tags.count + slots.reduce(0) { $0 + $1.weight }
-        weight += 2 * max(0, requiredCatTypes.count - 1) + 20 * rules.count
+        weight += 2 * max(0, requiredCatTypes.count - 1) + 20 * rules.count + (poi?.weight ?? 0)
         self.weight = max(weight, 1)
     }
 }
@@ -314,6 +318,7 @@ struct PatrolLibrary: @unchecked Sendable {
     let newCatPatrols: [String: [PatrolEvent]]
     let otherClanPatrols: [String: [PatrolEvent]]
     let prey: [String: [String]]
+    let places: PointsOfInterest?
     private let artDirectory: URL?
 
     init(directory: URL, artDirectory: URL?) throws {
@@ -336,6 +341,7 @@ struct PatrolLibrary: @unchecked Sendable {
         newCatPatrols = ["": load("new_cat.json"), "welcoming": load("new_cat_welcoming.json"), "hostile": load("new_cat_hostile.json")]
         otherClanPatrols = ["": load("other_clan.json"), "ally": load("other_clan_ally.json"), "hostile": load("other_clan_hostile.json")]
         prey = (try? JSONSerialization.jsonObject(with: Data(contentsOf: directory.appending(path: "patrols/prey.json")))) as? [String: [String]] ?? [:]
+        places = try? PointsOfInterest(directory: directory)
         self.artDirectory = artDirectory
     }
 
@@ -376,13 +382,13 @@ struct PatrolLibrary: @unchecked Sendable {
     }
 
     private static let blocked = [
-        "POI", "_list", "acc_", "given_herb", "mur_c", "multi_cat", "%{", "n_c:", "patrol_cats", "some_patrol",
+        "POI", "acc_", "given_herb", "mur_c", "multi_cat", "%{", "n_c:", "patrol_cats", "some_patrol",
     ]
     nonisolated(unsafe) private static let abbreviationPattern = try! Regex(#"\b(p_l|[rsn]_c\d?|m_c)\b"#)
 
     /// Text may only name cats the patrol or outcome defines, and no unsupported features.
     static func textIsSupported(_ text: String, abbreviations: Set<String>) -> Bool {
-        if blocked.contains(where: text.contains) { return false }
+        if blocked.contains(where: { text.contains($0) && !abbreviations.contains($0) }) { return false }
         for match in text.matches(of: abbreviationPattern) {
             let token = String(text[match.range])
             if !abbreviations.contains(token) { return false }

@@ -277,7 +277,7 @@ extension MoonEngine {
         let joins = !meeting && !dead
         for _ in 0..<count {
             let finalRank = rank ?? (moons.map { CatAge(moons: $0) }.map(Self.rankForAge) ?? .warrior)
-            var cat = factory.make(rank: finalRank, moons: litterMoons ?? moons, origin: social, sex: sex, using: &rng)
+            var cat = factory.make(rank: finalRank, moons: litterMoons ?? moons, origin: social, sex: sex, theyThem: clan.theyThemDefault, using: &rng)
             cat.parents = blood
             cat.adoptiveParents = adoptive
             let baby = cat.moons < 12

@@ -200,16 +200,16 @@ final class AdoptionGenderTests: XCTestCase {
     func testOldSavesDecode() throws {
         var rng = SeededRNG(seed: 20)
         var cat = adult(40, sex: .male, using: &rng)
-        cat.pronouns = .she
+        cat.pronouns = [.she]
         cat.adoptiveParents = [UUID()]
         let old = try JSONDecoder().decode(Cat.self, from: json(cat, removing: ["adoptiveParents", "genderAlign"]))
         XCTAssertEqual(old.adoptiveParents, [])
         XCTAssertEqual(old.genderAlign, .transFemale)
-        XCTAssertEqual(old.pronouns, .she)
+        XCTAssertEqual(old.pronouns, [.she])
 
-        cat.pronouns = .they
+        cat.pronouns = [.they]
         XCTAssertEqual(try JSONDecoder().decode(Cat.self, from: json(cat, removing: ["genderAlign"])).genderAlign, .nonbinary)
-        cat.pronouns = .he
+        cat.pronouns = [.he]
         XCTAssertEqual(try JSONDecoder().decode(Cat.self, from: json(cat, removing: ["genderAlign"])).genderAlign, .male)
 
         cat.genderAlign = GenderAlign(rawValue: "genderfluid")
@@ -217,7 +217,7 @@ final class AdoptionGenderTests: XCTestCase {
         XCTAssertEqual(round.genderAlign.rawValue, "genderfluid")
         XCTAssertTrue(round.genderAlign.isCustom)
 
-        let faded = FadedCat(id: UUID(), name: cat.name, pronouns: .he, rank: .warrior, moons: 40, deadFor: 200, afterlife: .starClan, parents: [])
+        let faded = FadedCat(id: UUID(), name: cat.name, pronouns: [.he], rank: .warrior, moons: 40, deadFor: 200, afterlife: .starClan, parents: [])
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(faded)) as? [String: Any])
         object["adoptiveParents"] = nil
         let oldFaded = try JSONDecoder().decode(FadedCat.self, from: JSONSerialization.data(withJSONObject: object))
@@ -239,7 +239,7 @@ final class AdoptionGenderTests: XCTestCase {
         for _ in 0..<400 {
             let baby = factory.make(rank: .kitten, moons: Int.random(in: 0...5, using: &rng), using: &rng)
             XCTAssertTrue(baby.isCis)
-            XCTAssertEqual(baby.pronouns, baby.sex == .female ? .she : .he)
+            XCTAssertEqual(baby.pronouns, [baby.sex == .female ? .she : .he])
         }
     }
 
@@ -249,8 +249,8 @@ final class AdoptionGenderTests: XCTestCase {
         for _ in 0..<2000 {
             let cat = factory.makeJoiner(origin: .loner, sex: .male, using: &rng)
             XCTAssertEqual(cat.sex, .male)
-            XCTAssertEqual(cat.pronouns, cat.genderAlign.defaultPronouns)
-            if cat.isCis { XCTAssertEqual(cat.pronouns, .he) }
+            XCTAssertEqual(cat.pronouns, [cat.genderAlign.defaultPronouns])
+            if cat.isCis { XCTAssertEqual(cat.pronouns, [.he]) }
             if cat.genderAlign == .transFemale { sawTrans = true }
         }
         XCTAssertTrue(sawTrans, "some older cats are trans")
@@ -273,10 +273,10 @@ final class AdoptionGenderTests: XCTestCase {
     func testSetGender() {
         var (clan, _) = clan(seed: 33)
         let id = clan.living[0].id
-        XCTAssertTrue(clan.setGender(id, genderAlign: GenderAlign(rawValue: "star-born!"), pronouns: .they))
+        XCTAssertTrue(clan.setGender(id, genderAlign: GenderAlign(rawValue: "star-born!"), pronouns: [.they]))
         XCTAssertEqual(clan[id]?.genderAlign.rawValue, "starborn")
-        XCTAssertEqual(clan[id]?.pronouns, .they)
-        XCTAssertFalse(clan.setGender(id, genderAlign: GenderAlign(rawValue: "  "), pronouns: .he))
+        XCTAssertEqual(clan[id]?.pronouns, [.they])
+        XCTAssertFalse(clan.setGender(id, genderAlign: GenderAlign(rawValue: "  "), pronouns: [.he]))
     }
 
     func testAdjectivesFollowThePronounSet() {
@@ -284,10 +284,10 @@ final class AdoptionGenderTests: XCTestCase {
         var cat = clan.living[0]
         cat.sex = .male
         cat.genderAlign = .transFemale
-        cat.pronouns = .she
+        cat.pronouns = [.she]
         let template = Self.assets.patrols.template
         XCTAssertEqual(template.resolve("{ADJ/m_c/sibling/brother/sister}", cats: ["m_c": cat], clan: clan), "sister")
-        cat.pronouns = .they
+        cat.pronouns = [.they]
         XCTAssertEqual(template.resolve("{ADJ/m_c/sibling/brother/sister}", cats: ["m_c": cat], clan: clan), "sibling")
     }
 }

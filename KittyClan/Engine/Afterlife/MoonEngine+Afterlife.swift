@@ -9,7 +9,7 @@ extension MoonEngine {
 
     /// Clangen's `create_clan` guide: a StarClan cat dead for 20–200 moons.
     func makeGuide(for clan: inout Clan, using rng: inout some RandomNumberGenerator) {
-        var guide = factory.make(rank: pick(Self.guideRanks, &rng), using: &rng)
+        var guide = factory.make(rank: pick(Self.guideRanks, &rng), theyThem: clan.theyThemDefault, using: &rng)
         guide.isDead = true
         guide.afterlife = .starClan
         guide.deadFor = Int.random(in: 20...200, using: &rng)

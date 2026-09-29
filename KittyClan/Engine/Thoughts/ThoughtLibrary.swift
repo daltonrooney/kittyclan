@@ -193,6 +193,7 @@ struct ThoughtBlock: Sendable {
 struct ThoughtLibrary: Sendable {
     /// Keyed by path without ".json", e.g. "while_alive/warrior" or "while_dead/starclan/general".
     private let files: [String: [ThoughtBlock]]
+    private let snippets: SnippetCollections?
 
     init(directory: URL) throws {
         let root = directory.appending(path: "thoughts")
@@ -204,9 +205,11 @@ struct ThoughtLibrary: Sendable {
             files[key] = json.compactMap(ThoughtBlock.init)
         }
         self.files = files
+        snippets = try? SnippetCollections(url: directory.appending(path: "snippet_collections.json"))
     }
 
     var blockCount: Int { files.values.reduce(0) { $0 + $1.count } }
+    var stringCount: Int { files.values.joined().reduce(0) { $0 + $1.strings.count } }
 
     /// Clangen's `_load_allowed_thoughts`.
     func pool(_ kind: ThoughtKind, for cat: Cat, in context: ThoughtContext) -> [ThoughtBlock] {
@@ -284,7 +287,8 @@ struct ThoughtLibrary: Sendable {
         guard !options.isEmpty else { return nil }
         let block = options[weighted(Array(zip(options.indices, options.map(\.weight))), &rng)]
         used.insert(block.id)
-        guard let line = block.strings.randomElement(using: &rng) else { return nil }
+        guard var line = block.strings.randomElement(using: &rng) else { return nil }
+        line = snippets?.expand(line, biome: context.clan.biome, using: &rng) ?? line
         return Thought(text: line, about: block.random != nil || line.contains("r_c") ? other?.id : nil)
     }
 }

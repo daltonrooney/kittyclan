@@ -162,6 +162,8 @@ struct EventLibrary: Sendable {
     let announcements: [String]
     let twoParentBirths: [String]
     let kitAmount: [String: String]
+    let places: PointsOfInterest
+    let transitions: [TransitionEvent]
 
     init(directory: URL) throws {
         func load(_ path: String) throws -> Any {
@@ -224,6 +226,8 @@ struct EventLibrary: Sendable {
         announcements = pregnancy["announcement"] as? [String] ?? []
         twoParentBirths = (pregnancy["birth"] as? [String: Any])?["two_parents"] as? [String] ?? []
         kitAmount = (try load("pregnancy.en.json") as? [String: Any])?["kit_amount"] as? [String: String] ?? [:]
+        places = try PointsOfInterest(directory: directory)
+        transitions = try events("transition/transition.json").compactMap(TransitionEvent.init)
     }
 
     var ceremonyCounts: [String: Int] { ceremonies.mapValues(\.count) }
@@ -351,10 +355,15 @@ struct EventLibrary: Sendable {
                     && context.supplies(event.supplies)
                     && (event.newAccessory.isEmpty || cat.appearance.accessories.count < 3)
                     && event.fits(context, clan: clan)
+                    && places.allows(event.poi, in: clan)
             }
             while !candidates.isEmpty {
                 let event = candidates.remove(at: weighted(Array(zip(candidates.indices, candidates.map(\.weight))), &rng))
                 if var pick = event.resolve(for: cat, fixed: fixed, in: clan, using: &rng) {
+                    if let poi = event.poi, let place = places.choose(poi, in: clan, using: &rng).map(places.name) {
+                        pick.template = pick.template.replacingOccurrences(of: "POI", with: place)
+                        pick.deathHistories = pick.deathHistories.mapValues { $0.replacingOccurrences(of: "POI", with: place) }
+                    }
                     pick.otherClan = context.otherClan?.id
                     return pick
                 }
@@ -444,6 +453,7 @@ private struct ShortEvent: Sendable {
     let location: [String]
     let excludedCats: Set<String>
     let futureEvents: [FutureEventSpec]
+    let poi: PoiRequirement?
     let weight: Int
 
     /// Neither an accessory event nor one that gives an accessory.
@@ -452,7 +462,7 @@ private struct ShortEvent: Sendable {
     private static let keys: Set<String> = [
         "event_id", "location", "season", "frequency", "sub_type", "tags", "event_text", "death_text",
         "m_c", "r_c", "history", "relationships", "exclude_involved", "supplies", "injury", "other_clan", "outsider",
-        "new_cat", "new_accessory", "future_event",
+        "new_cat", "new_accessory", "future_event", "poi",
     ]
 
     /// New-cat attributes KittyClan can create. Other-Clan cats and Clan-specific backstories aren't supported.
@@ -494,11 +504,13 @@ private struct ShortEvent: Sendable {
               let blocks = Optional(json["new_cat"] as? [[String]] ?? []),
               blocks.allSatisfy({ $0.allSatisfy(Self.isSupported) }),
               let newAccessory = Optional(json["new_accessory"] as? [String] ?? []),
+              let poi = Optional(PoiRequirement(json["poi"] as? [String: Any])),
               Constraint.textIsSupported(text, allowing: Set(
                   ["m_c", "r_c", "o_c_n", "mur_c"] + blocks.indices.flatMap { ["n_c:\($0)", "n_c_pre:\($0)"] }
-                      + (newAccessory.isEmpty ? [] : ["acc_singular", "acc_plural"])
+                      + (newAccessory.isEmpty ? [] : ["acc_singular", "acc_plural"]) + (poi == nil ? [] : ["POI"])
               ))
         else { return nil }
+        self.poi = poi
         self.newAccessory = newAccessory
         newCats = blocks
         let excluded = json["exclude_involved"] as? [String] ?? []

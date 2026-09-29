@@ -24,7 +24,7 @@ struct GameAssets: Sendable {
             traits: try TraitTable(url: text.appending(path: "trait_ranges.json"))
         )
         let library = try EventLibrary(directory: text)
-        let template = TextTemplate(pronouns: try PronounTable(url: text.appending(path: "pronouns.en.json")), names: names)
+        let template = TextTemplate(names: names, snippets: try SnippetCollections(url: text.appending(path: "snippet_collections.json")))
         let narrator = ClangenNarrator(library: library, template: template, fallback: BasicNarrator(names: names))
         let relationships = RelationshipEngine(library: try InteractionLibrary(directory: text), template: template)
         let engine = MoonEngine(

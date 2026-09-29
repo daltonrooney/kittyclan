@@ -29,9 +29,52 @@ enum Rank: String, Codable, CaseIterable, Sendable {
     ]
 }
 
-/// Clangen's three English pronoun sets (`pronouns.en.json` keys 0, 1, 2).
-enum Pronouns: String, Codable, CaseIterable, Sendable {
-    case they = "0", he = "1", she = "2"
+/// One of Clangen's pronoun sets: the built-in they, he and she sets from `pronouns.en.json`,
+/// or a custom set the player made.
+struct PronounSet: Codable, Hashable, Sendable {
+    var subject: String
+    var object: String
+    var poss: String
+    var inposs: String
+    var reflexive: String
+    /// Which `{VERB}` form to use: 1 plural ("they are"), 2 singular ("she is").
+    var conju: Int
+    /// Which `{ADJ}` word to use: 0 neutral, 1 masculine, 2 feminine.
+    var gender: Int
+
+    static let they = PronounSet(subject: "they", object: "them", poss: "their", inposs: "theirs", reflexive: "themself", conju: 1, gender: 0)
+    static let he = PronounSet(subject: "he", object: "him", poss: "his", inposs: "his", reflexive: "himself", conju: 2, gender: 1)
+    static let she = PronounSet(subject: "she", object: "her", poss: "her", inposs: "hers", reflexive: "herself", conju: 2, gender: 2)
+    static let builtIn: [PronounSet] = [.they, .he, .she]
+
+    private enum CodingKeys: String, CodingKey {
+        case subject, object, poss, inposs, conju, gender
+        case reflexive = "self"
+    }
+
+    /// Saves from before cats had several sets stored "0", "1" or "2" for the built-in sets.
+    static func legacy(_ key: String) -> PronounSet {
+        switch key {
+        case "1": .he
+        case "2": .she
+        default: .they
+        }
+    }
+
+    /// Clangen's pronoun fields by name: "subject", "object", "poss", "inposs" or "self".
+    subscript(field: String) -> String? {
+        switch field {
+        case "subject": subject
+        case "object": object
+        case "poss": poss
+        case "inposs": inposs
+        case "self": reflexive
+        default: nil
+        }
+    }
+
+    var label: String { "\(subject)/\(object)" }
+    var isBuiltIn: Bool { Self.builtIn.contains(self) }
 }
 
 /// Clangen's `genderalign`: a built-in identity or free text the player typed.
@@ -51,7 +94,7 @@ struct GenderAlign: RawRepresentable, Codable, Hashable, Sendable {
     var label: String { rawValue.capitalized }
 
     /// Clangen's `config.json` pronoun sets.
-    var defaultPronouns: Pronouns {
+    var defaultPronouns: PronounSet {
         switch self {
         case .male, .transMale: .he
         case .female, .transFemale: .she
@@ -80,7 +123,8 @@ struct Cat: Identifiable, Codable, Hashable, Sendable {
     var name: CatName
     var sex: Sex
     var genderAlign: GenderAlign
-    var pronouns: Pronouns
+    /// One set is picked at random each time text about the cat is written.
+    var pronouns: [PronounSet]
     var moons: Int
     var appearance: CatAppearance
     var personality: Personality
@@ -162,11 +206,11 @@ extension Cat {
         id = try c.decode(UUID.self, forKey: .id)
         name = try c.decode(CatName.self, forKey: .name)
         sex = try c.decode(Sex.self, forKey: .sex)
-        pronouns = try c.decode(Pronouns.self, forKey: .pronouns)
+        pronouns = try c.decodePronouns(forKey: .pronouns)
         if let align = try c.decodeIfPresent(GenderAlign.self, forKey: .genderAlign) {
             genderAlign = align
         } else {
-            genderAlign = switch (sex, pronouns) {
+            genderAlign = switch (sex, pronouns.first ?? .they) {
             case (_, .they): .nonbinary
             case (.female, .he): .transMale
             case (.male, .she): .transFemale
@@ -210,5 +254,14 @@ extension Cat {
         isNear = try c.decodeIfPresent(Bool.self, forKey: .isNear) ?? true
         lastClanRank = try c.decodeIfPresent(Rank.self, forKey: .lastClanRank)
         pastRanks = try c.decodeIfPresent([Rank].self, forKey: .pastRanks) ?? []
+    }
+}
+
+extension KeyedDecodingContainer {
+    /// A list of pronoun sets, or the single built-in set key older saves stored.
+    func decodePronouns(forKey key: Key) throws -> [PronounSet] {
+        if let legacy = try? decode(String.self, forKey: key) { return [.legacy(legacy)] }
+        let sets = try decode([PronounSet].self, forKey: key)
+        return sets.isEmpty ? [.they] : sets
     }
 }

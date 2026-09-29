@@ -136,7 +136,7 @@ struct Constraint: Sendable {
         "adoption",
     ]
     private static let blockedTokens = [
-        "POI", "mur_c", "acc_", "_list", "multi_cat", "given_herb", "n_c", "r_c0", "r_c1", "r_c2", "r_c3",
+        "POI", "mur_c", "acc_", "multi_cat", "given_herb", "n_c", "r_c0", "r_c1", "r_c2", "r_c3",
         "p_l", "s_c", "cat_tag", "past_deputy", "mc_mate", "rc_mate", "%{", "app1", "app2", "patrol_cats",
     ]
     nonisolated(unsafe) private static let preyToken = try! Regex(#"[bdfmpw]_(tp|mp|bp)"#)

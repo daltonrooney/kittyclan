@@ -83,9 +83,14 @@ final class PatrolTests: XCTestCase {
     }
 
     func testDeclineChangesNothing() throws {
-        var (clan, rng) = grownClan(seed: 42)
-        let cats = PatrolEngine.eligible(in: clan).filter { $0.rank == .warrior }.prefix(3).map(\.id)
-        let session = try XCTUnwrap(patrols.start(Array(cats), type: .border, in: &clan, using: &rng))
+        var found: (Clan, SeededRNG, [UUID], PatrolSession)?
+        for seed in UInt64(42)..<52 where found == nil {
+            var (clan, rng) = grownClan(seed: seed)
+            let cats = PatrolEngine.eligible(in: clan).filter { $0.rank == .warrior }.prefix(3).map(\.id)
+            guard cats.count == 3, let session = patrols.start(Array(cats), type: .border, in: &clan, using: &rng) else { continue }
+            found = (clan, rng, Array(cats), session)
+        }
+        var (clan, rng, cats, session) = try XCTUnwrap(found, "some grown Clan can send a border patrol")
         let before = clan.cats
         let result = patrols.finish(session, choice: .decline, in: &clan, using: &rng)
         XCTAssertEqual(clan.cats, before)
