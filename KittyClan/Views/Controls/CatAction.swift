@@ -4,7 +4,7 @@ import Foundation
 enum CatAction: String, Identifiable {
     case role, mentor, mate
     case adoptiveParents = "adopt"
-    case gender, rename, mediate
+    case gender, rename, mediate, kill
 
     var id: Self { self }
 }

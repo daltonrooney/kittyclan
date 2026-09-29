@@ -29,10 +29,11 @@ extension MoonEngine {
         let context = ThoughtContext(clan: clan)
         var used: Set<String> = []
         let kind = kind ?? cat.nextThought ?? (cat.id == clan.guide ? .isGuide : cat.isDead ? .whileDead : .whileAlive)
-        let thought = thoughts.thought(kind, for: cat, in: context, used: &used, using: &rng)
+        let thought = thoughts.thought(kind, for: cat, about: clan[cat.nextThoughtAbout], in: context, used: &used, using: &rng)
         if let i = clan.index(of: id) {
             clan.cats[i].thought = thought
             clan.cats[i].nextThought = nil
+            clan.cats[i].nextThoughtAbout = nil
         } else if let i = clan.outsiders.firstIndex(where: { $0.id == id }) {
             clan.outsiders[i].thought = thought
             clan.outsiders[i].nextThought = nil

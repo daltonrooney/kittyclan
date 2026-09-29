@@ -434,6 +434,32 @@ final class AppModel {
         await save()
     }
 
+    /// Moves a dead cat on to the next afterlife, as Clangen's profile button does.
+    func moveToNextAfterlife(_ id: Cat.ID) async {
+        guard let assets, let current = clan, current[id]?.isDead == true, !isAdvancing else { return }
+        isAdvancing = true
+        defer { isAdvancing = false }
+        clan = await Self.moveToNextAfterlife(id, in: current, engine: assets.engine)
+        await save()
+    }
+
+    /// Ends a living Clan cat's life (or one of a leader's lives) with the player's reason.
+    func kill(_ id: Cat.ID, reason: String, allLives: Bool) async {
+        guard let assets, let current = clan, current.isAlive(id), !isAdvancing else { return }
+        isAdvancing = true
+        defer { isAdvancing = false }
+        clan = await Self.kill(id, reason: reason, allLives: allLives, in: current, engine: assets.engine)
+        rollCamp()
+        await save()
+    }
+
+    func removeAccessories(from id: Cat.ID) async {
+        guard var current = clan, !isAdvancing else { return }
+        current.removeAccessories(from: id)
+        clan = current
+        await save()
+    }
+
     /// Turns a Clan option such as `fading` or `becomeMediator` on or off.
     func setOption(_ option: WritableKeyPath<Clan, Bool>, _ on: Bool) async {
         guard var current = clan, !isAdvancing else { return }
@@ -722,6 +748,22 @@ final class AppModel {
     }
 
     @concurrent
+    private static func moveToNextAfterlife(_ id: Cat.ID, in clan: Clan, engine: MoonEngine) async -> Clan {
+        var clan = clan
+        var rng = SystemRandomNumberGenerator()
+        engine.moveToNextAfterlife(id, in: &clan, using: &rng)
+        return clan
+    }
+
+    @concurrent
+    private static func kill(_ id: Cat.ID, reason: String, allLives: Bool, in clan: Clan, engine: MoonEngine) async -> Clan {
+        var clan = clan
+        var rng = SystemRandomNumberGenerator()
+        engine.killCat(id, reason: reason, allLives: allLives, in: &clan, using: &rng)
+        return clan
+    }
+
+    @concurrent
     private static func changeRank(_ rank: Rank, for id: Cat.ID, in clan: Clan, engine: MoonEngine) async -> (Clan, Bool) {
         var clan = clan
         var rng = SystemRandomNumberGenerator()
@@ -775,6 +817,7 @@ extension AppModel {
     /// `-foundingStep biome|camp` (any `-foundingStep` starts a new Clan if one is open),
     /// `-deaths N` (sends N living warriors, apprentices or elders to the afterlife),
     /// `-afterlife YES|starclan|dark_forest|unknown_residence` (opens the afterlife), `-afterlifeSort rank|death|name`,
+    /// `-afterlifeMoves N` (moves the `-showCat` ghost on N afterlives), `-kill YES|all` (kills the `-showCat` cat; `all` takes every life),
     /// `-adopt YES` (the youngest cat who can be adopted gets its first candidate as an adoptive parent).
     /// `-autofound YES` replaces the last played Clan; `-autofound new` founds into a new save slot.
     /// `-mediator YES` makes the first warrior a mediator,
@@ -900,6 +943,13 @@ extension AppModel {
             }
             clan = current
             await save()
+        }
+        let moves = defaults.integer(forKey: "afterlifeMoves")
+        if moves > 0, let cat = debugCatToShow, cat.isDead {
+            for _ in 0..<moves { await moveToNextAfterlife(cat.id) }
+        }
+        if let kill = defaults.string(forKey: "kill"), let cat = debugCatToShow, cat.isAlive {
+            await self.kill(cat.id, reason: "m_c was struck by lightning in the storm.", allLives: kill == "all")
         }
         if let tab = defaults.string(forKey: "afterlife") {
             showAfterlife()

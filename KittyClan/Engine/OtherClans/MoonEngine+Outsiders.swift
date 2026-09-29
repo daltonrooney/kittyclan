@@ -263,6 +263,7 @@ extension MoonEngine {
            }) {
             if dead {
                 clan.sendToAfterlife(existing.id, history: nil, using: &rng)
+                if let i = clan.outsiders.firstIndex(where: { $0.id == existing.id }) { clan.outsiders[i].nextThought = .onDeath }
                 return ([existing.id], false)
             }
             if meeting { return ([existing.id], false) }
@@ -288,6 +289,7 @@ extension MoonEngine {
             if !(baby && joins) { factory.maybeCollar(&cat, using: &rng) }
             if dead {
                 cat.enterAfterlife(clan.afterlife(for: cat, isOutsider: !joins), moon: clan.age, using: &rng)
+                cat.nextThought = .onDeath
             }
             if joins {
                 cat.rank = finalRank

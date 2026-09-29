@@ -220,3 +220,82 @@ extension RelationshipEngine {
         unsetMates(a, b, in: &clan)
     }
 }
+
+extension Afterlife {
+    /// Where Clangen's profile button sends a dead cat next: StarClan, then the Dark Forest,
+    /// then the Unknown Residence. The guide only moves between StarClan and the Dark Forest.
+    func next(isGuide: Bool) -> Afterlife {
+        switch self {
+        case .starClan: .darkForest
+        case .darkForest: isGuide ? .starClan : .unknownResidence
+        case .unknownResidence: .starClan
+        }
+    }
+}
+
+extension Clan {
+    /// Clangen's "destroy accessory" button: the cat loses every accessory it wears.
+    mutating func removeAccessories(from id: UUID) {
+        if let i = index(of: id) {
+            cats[i].appearance.accessories = []
+        } else if let i = outsiders.firstIndex(where: { $0.id == id }) {
+            outsiders[i].appearance.accessories = []
+        }
+    }
+}
+
+extension MoonEngine {
+    /// Clangen's profile button for a dead cat: moves it to the next afterlife and gives it a
+    /// thought about the move. Moving the guide changes where the Clan's dead go.
+    @discardableResult
+    func moveToNextAfterlife(_ id: UUID, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> Afterlife? {
+        guard let cat = clan[id], cat.isDead else { return nil }
+        let isGuide = id == clan.guide
+        let next = (cat.afterlife ?? clan.guideAfterlife).next(isGuide: isGuide)
+        if let i = clan.index(of: id) {
+            clan.cats[i].afterlife = next
+        } else if let i = clan.outsiders.firstIndex(where: { $0.id == id }) {
+            clan.outsiders[i].afterlife = next
+        }
+        refreshThought(isGuide ? .isGuide : .onAfterlifeChange, for: id, in: &clan, using: &rng)
+        return next
+    }
+
+    /// Clangen's kill window text: letters, digits, spaces and `<>/.()*'&#!?,|_-` only.
+    static func sanitizedDeathReason(_ text: String) -> String {
+        let allowed = Set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<>/.()*'&#!?,| _-")
+        let straightened = text.replacingOccurrences(of: "\u{2019}", with: "'").replacingOccurrences(of: "\u{2018}", with: "'")
+        return String(straightened.filter(allowed.contains))
+    }
+
+    static let defaultKillReason = "This cat was killed by a higher power."
+
+    /// Clangen's kill window: a living Clan cat dies with the player's reason as its history.
+    /// A leader loses one life, or every remaining life with `allLives`. Grief follows a death,
+    /// and what the Clan feels is added to this moon's log.
+    @discardableResult
+    func killCat(_ id: UUID, reason: String, allLives: Bool, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> Bool {
+        guard clan.isAlive(id), let i = clan.index(of: id) else { return false }
+        let cleaned = Self.sanitizedDeathReason(reason)
+        let history = cleaned.isEmpty ? Self.defaultKillReason : cleaned
+        if clan.leader == id, allLives, clan.leaderLives > 1 {
+            let extra = clan.leaderLives - 1
+            clan.leaderLives = 1
+            clan.cats[i].deaths += Array(repeating: DeathRecord(text: history, moon: clan.age), count: extra)
+        }
+        let events = loseLifeOrDie(id, cause: .misfortune, history: history, in: &clan, using: &rng)
+            .filter { if case .story = $0 { true } else { false } }
+        let grieving = clan.living.filter { [.onGriefTowardBody, .onGriefNoBody].contains($0.nextThought) }
+        for cat in [id] + grieving.map(\.id) {
+            refreshThought(for: cat, in: &clan, using: &rng)
+        }
+        guard !events.isEmpty else { return true }
+        let entries = events.map { narrator.entry($0, in: clan, using: &rng) }
+        if let last = clan.history.indices.last, clan.history[last].moon == clan.age {
+            clan.history[last].entries += entries
+        } else {
+            clan.history.append(MoonLog(moon: clan.age, entries: entries))
+        }
+        return true
+    }
+}

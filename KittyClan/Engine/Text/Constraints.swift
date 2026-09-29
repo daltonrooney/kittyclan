@@ -20,6 +20,9 @@ struct Constraint: Sendable {
     var experienceLevels: [String]?
     /// Legacy short-event `relationship_status` tokens, checked by the caller against the other cat.
     var relationshipStatus: [String] = []
+    /// Clangen's `group`: "player_clan", an afterlife, "afterlife" for any of them, or "match:<abbr>";
+    /// one "-" entry makes the whole list exclusions. Nil means the living Clan.
+    var groups: [String]?
 
     init?(_ json: [String: Any]) {
         for (key, value) in json {
@@ -33,7 +36,8 @@ struct Constraint: Sendable {
             case "skill":
                 skills = value as? [String]
             case "group":
-                guard (value as? [String])?.allSatisfy({ $0 == "player_clan" }) == true else { return nil }
+                guard let list = value as? [String], list.allSatisfy(Self.isSupportedGroup) else { return nil }
+                if !list.allSatisfy({ $0 == "player_clan" }) { groups = list }
             case "has_mentor": hasMentor = value as? Bool
             case "has_apprentice":
                 guard let spec = value as? [String: Any], Set(spec.keys).isSubset(of: ["current", "former"]) else { return nil }
@@ -57,9 +61,47 @@ struct Constraint: Sendable {
         }
     }
 
-    /// - Parameter status: the status to match instead of the rank, e.g. an outsider's "loner".
-    func matches(_ cat: Cat, status: String? = nil, allowNewborn: Bool = true) -> Bool {
+    private static func isSupportedGroup(_ group: String) -> Bool {
+        let name = String(group.drop { $0 == "-" })
+        return name.hasPrefix("match:") || ["player_clan", "afterlife"].contains(name) || Afterlife(rawValue: name) != nil
+    }
+
+    /// Clangen's `status.group` for a Clan cat: "player_clan" while alive, otherwise its afterlife.
+    static func group(of cat: Cat) -> String {
+        cat.isDead ? (cat.afterlife ?? .starClan).rawValue : "player_clan"
+    }
+
+    /// Clangen's `_check_cat_group`. `involved` holds the cats `match:` entries refer to.
+    func groupAllows(_ cat: Cat, involved: [String: Cat] = [:]) -> Bool {
+        guard let groups, !groups.isEmpty else { return cat.isAlive }
+        let group = Self.group(of: cat)
+        func hits(_ value: String) -> Bool {
+            if value.hasPrefix("match:") {
+                return involved[String(value.dropFirst("match:".count))].map { Self.group(of: $0) == group } ?? false
+            }
+            return value == "afterlife" ? cat.isDead : value == group
+        }
+        if groups.contains(where: { $0.hasPrefix("-") }) {
+            return !groups.contains { hits(String($0.drop { $0 == "-" })) }
+        }
+        return groups.contains(where: hits)
+    }
+
+    /// The cats this constraint may pick: the living Clan, or with a `group`, any Clan cat or
+    /// outsider in that group. Faded cats are gone and never chosen.
+    func candidates(in clan: Clan, involved: [String: Cat] = [:]) -> [Cat] {
+        guard groups != nil else { return clan.living }
+        return (clan.cats + clan.outsiders).filter { cat in
+            groupAllows(cat, involved: involved) && (cat.isDead || !clan.isOutsider(cat.id))
+        }
+    }
+
+    /// - Parameters:
+    ///   - status: the status to match instead of the rank, e.g. an outsider's "loner".
+    ///   - involved: cats already in the event, for `match:` groups.
+    func matches(_ cat: Cat, status: String? = nil, allowNewborn: Bool = true, involved: [String: Cat] = [:]) -> Bool {
         if !allowNewborn, cat.rank == .newborn, ages?.contains("newborn") != true { return false }
+        if groups != nil, !groupAllows(cat, involved: involved) { return false }
         return cat.skills.satisfies(skills ?? [])
             && statHolds(for: cat)
             && Self.listAllows(ages, cat.age.rawValue)

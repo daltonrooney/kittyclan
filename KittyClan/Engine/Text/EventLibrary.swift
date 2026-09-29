@@ -162,6 +162,8 @@ struct EventLibrary: Sendable {
     let announcements: [String]
     let twoParentBirths: [String]
     let kitAmount: [String: String]
+    /// The `event_id` of every ceremony and short event that loaded.
+    let eventIDs: Set<String>
 
     init(directory: URL) throws {
         func load(_ path: String) throws -> Any {
@@ -224,6 +226,10 @@ struct EventLibrary: Sendable {
         announcements = pregnancy["announcement"] as? [String] ?? []
         twoParentBirths = (pregnancy["birth"] as? [String: Any])?["two_parents"] as? [String] ?? []
         kitAmount = (try load("pregnancy.en.json") as? [String: Any])?["kit_amount"] as? [String: String] ?? [:]
+
+        let shortEvents = [deaths, misc, miscBySubType, accessoryEvents, injuryEvents, newCatEvents]
+            .flatMap { $0.values.flatMap { $0.values.flatMap { $0.map(\.id) } } }
+        eventIDs = Set(ceremonies.values.flatMap { $0.map(\.id) } + shortEvents)
     }
 
     var ceremonyCounts: [String: Int] { ceremonies.mapValues(\.count) }
@@ -367,6 +373,7 @@ struct EventLibrary: Sendable {
 // MARK: - Parsed events
 
 private struct Ceremony: Sendable {
+    let id: String
     let tags: [String]
     let strings: [String]
     let main: Constraint
@@ -394,6 +401,7 @@ private struct Ceremony: Sendable {
         let allowed = Set(["m_c"] + abbrs)
         self.strings = strings.filter { Constraint.textIsSupported($0, allowing: allowed) }
         guard !self.strings.isEmpty else { return nil }
+        id = json["event_id"] as? String ?? ""
         self.tags = tags
         self.main = main
         self.others = others
@@ -405,7 +413,10 @@ private struct Ceremony: Sendable {
         guard main.matches(cat) else { return nil }
         var cats = ["m_c": cat.id]
         for (abbr, constraint) in others {
-            let options = clan.living.filter { !cats.values.contains($0.id) && constraint.matches($0) }.shuffled(using: &rng)
+            let involved = cats.compactMapValues { clan[$0] }
+            let options = constraint.candidates(in: clan, involved: involved)
+                .filter { !cats.values.contains($0.id) && constraint.matches($0, involved: involved) }
+                .shuffled(using: &rng)
             guard let chosen = options.first(where: { candidate in
                 var trial = cats.mapValues { [$0] }
                 trial[abbr] = [candidate.id]
@@ -418,6 +429,7 @@ private struct Ceremony: Sendable {
 }
 
 private struct ShortEvent: Sendable {
+    let id: String
     let subType: String
     let frequency: Int
     let season: [String]
@@ -544,6 +556,7 @@ private struct ShortEvent: Sendable {
               injuries.allSatisfy({ Set($0.cats).isSubset(of: ["m_c", "r_c"]) })
         else { return nil }
 
+        id = json["event_id"] as? String ?? ""
         subType = subTypes.first ?? ""
         frequency = json["frequency"] as? Int ?? 4
         season = json["season"] as? [String] ?? ["any"]
@@ -583,9 +596,11 @@ private struct ShortEvent: Sendable {
         if text.contains("mur_c"), cats["mur_c"] == nil { return nil }
         if let random {
             let romance = tags.contains("romance")
-            let options = clan.living.filter { other in
+            let involved = ["m_c": cat]
+            let options = random.candidates(in: clan, involved: involved).filter { other in
                 (fixed["r_c"].map { other.id == $0 } ?? !cats.values.contains(other.id))
-                    && other.id != cat.id && random.matches(other, allowNewborn: false)
+                    && other.id != cat.id && random.matches(other, allowNewborn: false, involved: involved)
+                    && (other.isAlive || !randomDies && injuries.allSatisfy { !$0.cats.contains("r_c") })
                     && main.relationshipHolds(from: cat, to: other, in: clan)
                     && random.relationshipHolds(from: other, to: cat, in: clan)
                     && injuries.allSatisfy { !$0.cats.contains("r_c") || $0.allows(other) }
