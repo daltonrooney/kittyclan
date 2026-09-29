@@ -21,7 +21,10 @@ struct CatAboutSection: View {
                 LabeledContent("Rank", value: cat.rank.label)
             }
             LabeledContent("Age", value: "\(cat.age.label), \(cat.moonsText)")
-            LabeledContent("Sex", value: cat.sex.rawValue.capitalized)
+            LabeledContent("Gender", value: cat.genderLabel)
+            if !cat.isCis {
+                LabeledContent("Sex", value: cat.sex.rawValue.capitalized)
+            }
             LabeledContent("Personality", value: cat.personality.trait.capitalized)
             LabeledContent("Skills") {
                 Text(model.skills(of: cat))

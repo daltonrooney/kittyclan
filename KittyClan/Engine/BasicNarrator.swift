@@ -46,6 +46,8 @@ struct BasicNarrator: Narrator {
             "\(name(mother, in: clan)) is expecting kits."
         case .born(let mother, let father, let kits):
             "\(name(mother, in: clan)) had a litter of \(kits.count) with \(name(father, in: clan))."
+        case .adopted(let parents, let kits):
+            "\(parents.map { name($0, in: clan) }.joined(separator: " and ")) found a litter of \(kits.count) kits and \(parents.count == 1 ? "decides" : "decide") to adopt them."
         case .joined(let cat, _):
             "\(name(cat, in: clan)) has joined the Clan."
         case .litterFound(let kits, _):

@@ -15,7 +15,7 @@ extension MoonEngine {
     private func pickText(_ options: [String], healer: Cat?, for id: UUID, indexZeroIsHealer: Bool, using rng: inout some RandomNumberGenerator) -> String? {
         let helped = healer.map { $0.id != id } ?? false
         if helped { return options.randomElement(using: &rng) }
-        let pool = indexZeroIsHealer && options.count > 1 ? Array(options.dropFirst()) : options.filter { !$0.contains("r_c") }
+        let pool = (indexZeroIsHealer && options.count > 1 ? Array(options.dropFirst()) : options).filter { !$0.contains("r_c") }
         return pool.randomElement(using: &rng)
     }
 

@@ -29,7 +29,7 @@ struct MatePairCard: View {
             }
             if let partner {
                 if partner.sex == cat.sex {
-                    Label("This pair can't have kits together.", systemImage: "info.circle")
+                    Label(model.clan?.sameSexAdoption == true ? "This pair can adopt kits." : "This pair can't have kits together.", systemImage: "info.circle")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }

@@ -18,10 +18,10 @@ enum FamilyGroup: String, CaseIterable, Identifiable {
     /// Closest kind first.
     var kinds: [Kin.Kind] {
         switch self {
-        case .parents: [.parent]
+        case .parents: [.parent, .adoptiveParent]
         case .mates: [.mate]
-        case .kits: [.kit]
-        case .siblings: [.littermate, .sibling, .halfSibling]
+        case .kits: [.kit, .adoptiveKit]
+        case .siblings: [.littermate, .sibling, .halfSibling, .adoptiveSibling]
         case .grandparents: [.grandparent]
         case .grandkits: [.grandkit]
         case .auntsAndUncles: [.auntOrUncle]

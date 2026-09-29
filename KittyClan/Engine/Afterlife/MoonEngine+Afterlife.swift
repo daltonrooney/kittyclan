@@ -59,7 +59,8 @@ extension MoonEngine {
         clan.outsiders.removeAll { $0.id == id }
         clan.faded.append(FadedCat(
             id: id, name: cat.name, pronouns: cat.pronouns, rank: cat.rank, moons: cat.moons,
-            deadFor: cat.deadFor, afterlife: afterlife, parents: cat.parents
+            deadFor: cat.deadFor, afterlife: afterlife, parents: cat.parents,
+            adoptiveParents: cat.adoptiveParents
         ))
     }
 

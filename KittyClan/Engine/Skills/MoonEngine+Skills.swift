@@ -35,7 +35,7 @@ extension MoonEngine {
         var skills = cat.skills
 
         if skills.primary == nil {
-            let parental = cat.parents.compactMap { clan[$0] }.flatMap { $0.skills.all.map(\.path) }
+            let parental = cat.allParents.compactMap { clan[$0] }.flatMap { $0.skills.all.map(\.path) }
             let path = !parental.isEmpty && Bool.random(using: &rng) ? pick(parental, &rng) : SkillPath.random(using: &rng)
             skills.primary = Skill(path: path, points: 0, interestOnly: cat.rank.isApprentice || cat.rank == .kitten)
         }

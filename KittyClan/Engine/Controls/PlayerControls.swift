@@ -1,6 +1,7 @@
 import Foundation
 
-/// The choices Clangen leaves to the player: roles, mentors, mates and names. None of them
+/// The choices Clangen leaves to the player: roles, mentors, mates, adoptive parents, names
+/// and gender. None of them
 /// are written to the moon log, as in Clangen.
 extension Rank {
     /// Clangen's RoleScreen buttons for a cat of this rank.
@@ -72,6 +73,76 @@ extension Clan {
         if let i = index(of: id) { return apply(&cats[i]) }
         if let i = outsiders.firstIndex(where: { $0.id == id }) { return apply(&outsiders[i]) }
         return false
+    }
+}
+
+extension Clan {
+    /// Clangen's `get_valid_adoptive_parents` for a living Clan cat: living Clan cats at least
+    /// 14 moons older who aren't already its parent, its mate or a relative of its mates.
+    func adoptiveParentCandidates(for id: UUID, matesOfParentsOnly: Bool = false, unrelatedOnly: Bool = false) -> [Cat] {
+        guard let cat = self[id], cat.isAlive, !isOutsider(id) else { return [] }
+        let mateKin = cat.mates.reduce(into: Set<UUID>()) { $0.formUnion(relatives(of: $1)) }
+        let parentMates = Set(cat.allParents.compactMap { self[$0] }.flatMap(\.mates))
+        let related = unrelatedOnly ? relatives(of: id) : []
+        return living.filter { other in
+            other.id != id
+                && other.moons - cat.moons >= 14
+                && !cat.mates.contains(other.id)
+                && !cat.allParents.contains(other.id)
+                && !mateKin.contains(other.id)
+                && (!matesOfParentsOnly || parentMates.contains(other.id))
+                && !related.contains(other.id)
+        }
+    }
+
+    /// Clangen's `set_adoptive_parent`: both grow closer. Returns false if the cat can't adopt this kit.
+    @discardableResult
+    mutating func adopt(_ kitID: UUID, by parentID: UUID) -> Bool {
+        guard adoptiveParentCandidates(for: kitID).contains(where: { $0.id == parentID }),
+              let i = index(of: kitID) else { return false }
+        cats[i].adoptiveParents.append(parentID)
+        for (a, b) in [(kitID, parentID), (parentID, kitID)] where isAlive(a) {
+            updateRelationship(from: a, to: b) {
+                $0.add(.like, 20)
+                $0.add(.comfort, 20)
+                $0.add(.trust, 10)
+            }
+        }
+        return true
+    }
+
+    /// Clangen's `unset_adoptive_parent`: both think less of each other. Blood parents can't be removed.
+    @discardableResult
+    mutating func unadopt(_ kitID: UUID, from parentID: UUID, using rng: inout some RandomNumberGenerator) -> Bool {
+        guard let i = index(of: kitID), cats[i].adoptiveParents.contains(parentID) else { return false }
+        cats[i].adoptiveParents.removeAll { $0 == parentID }
+        if isAlive(kitID) {
+            updateRelationship(from: kitID, to: parentID) {
+                $0.add(.like, -Int.random(in: 10...30, using: &rng))
+                $0.add(.comfort, -Int.random(in: 10...30, using: &rng))
+                $0.add(.trust, -Int.random(in: 5...15, using: &rng))
+            }
+        }
+        if isAlive(parentID) {
+            updateRelationship(from: parentID, to: kitID) {
+                $0.add(.like, -20)
+                $0.add(.comfort, -20)
+                $0.add(.trust, -10)
+            }
+        }
+        return true
+    }
+
+    /// Clangen's ChangeGenderScreen: letters, digits and spaces only. Returns false for an
+    /// outsider or an empty identity.
+    @discardableResult
+    mutating func setGender(_ id: UUID, genderAlign: GenderAlign, pronouns: Pronouns) -> Bool {
+        let cleaned = String(genderAlign.rawValue.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) || $0 == " " })
+            .trimmingCharacters(in: .whitespaces)
+        guard let i = index(of: id), !cleaned.isEmpty else { return false }
+        cats[i].genderAlign = GenderAlign(rawValue: cleaned)
+        cats[i].pronouns = pronouns
+        return true
     }
 }
 

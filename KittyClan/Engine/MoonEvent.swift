@@ -19,6 +19,8 @@ enum MoonEvent: Sendable {
     case becameMates(UUID, UUID)
     case expecting(mother: UUID)
     case born(mother: UUID, father: UUID, kits: [UUID])
+    /// Mates who can't have kits together took in an abandoned litter.
+    case adopted(parents: [UUID], kits: [UUID])
     case joined(UUID, foundBy: UUID)
     case litterFound([UUID], foundBy: UUID)
     case noDeputy
@@ -33,7 +35,7 @@ enum MoonEvent: Sendable {
         case .apprenticed, .newMentor, .graduated, .retired, .deputyAppointed, .becameLeader, .becameMediator: .ceremony
         case .leaderLostLife, .died: .death
         case .becameMates, .expecting: .relationship
-        case .born: .birth
+        case .born, .adopted: .birth
         case .joined, .litterFound: .join
         }
     }
@@ -50,6 +52,7 @@ enum MoonEvent: Sendable {
         case .becameMates(let a, let b): [a, b]
         case .expecting(let m): [m]
         case .born(let m, let f, let kits): [m, f] + kits
+        case .adopted(let parents, let kits): parents + kits
         case .litterFound(let kits, let by): kits + [by]
         }
     }

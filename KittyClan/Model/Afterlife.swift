@@ -49,6 +49,23 @@ struct FadedCat: Codable, Hashable, Sendable, Identifiable {
     var deadFor: Int
     var afterlife: Afterlife
     var parents: [UUID]
+    var adoptiveParents: [UUID] = []
+}
+
+extension FadedCat {
+    /// Saves from earlier versions may lack newer fields, which then take their defaults.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(CatName.self, forKey: .name)
+        pronouns = try c.decode(Pronouns.self, forKey: .pronouns)
+        rank = try c.decode(Rank.self, forKey: .rank)
+        moons = try c.decode(Int.self, forKey: .moons)
+        deadFor = try c.decode(Int.self, forKey: .deadFor)
+        afterlife = try c.decode(Afterlife.self, forKey: .afterlife)
+        parents = try c.decode([UUID].self, forKey: .parents)
+        adoptiveParents = try c.decodeIfPresent([UUID].self, forKey: .adoptiveParents) ?? []
+    }
 }
 
 extension Cat {
