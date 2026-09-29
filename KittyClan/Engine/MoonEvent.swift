@@ -18,19 +18,23 @@ enum MoonEvent: Sendable {
     case died(UUID, DeathCause)
     case becameMates(UUID, UUID)
     case expecting(mother: UUID)
-    case born(mother: UUID, father: UUID, kits: [UUID])
+    case born(mother: UUID, father: UUID?, kits: [UUID])
     /// Mates who can't have kits together took in an abandoned litter.
     case adopted(parents: [UUID], kits: [UUID])
     case joined(UUID, foundBy: UUID)
     case litterFound([UUID], foundBy: UUID)
     case noDeputy
+    /// The Clan has no deputy and the leader doesn't name one automatically.
+    case deputyVacant
+    /// Apprentices without a mentor while mentors aren't assigned automatically.
+    case missingMentors([UUID])
     case lowPrey
     /// A Clangen event whose text is filled in by the narrator.
     case story(StoryPick, LogEntry.Kind)
 
     var kind: LogEntry.Kind {
         switch self {
-        case .founded, .noDeputy, .lowPrey: .info
+        case .founded, .noDeputy, .deputyVacant, .missingMentors, .lowPrey: .info
         case .story(_, let kind): kind
         case .apprenticed, .newMentor, .graduated, .retired, .deputyAppointed, .becameLeader, .becameMediator: .ceremony
         case .leaderLostLife, .died: .death
@@ -42,7 +46,8 @@ enum MoonEvent: Sendable {
 
     var cats: [UUID] {
         switch self {
-        case .founded, .noDeputy, .lowPrey: []
+        case .founded, .noDeputy, .deputyVacant, .lowPrey: []
+        case .missingMentors(let apprentices): apprentices
         case .apprenticed(let cat, let mentor, _): [cat] + [mentor].compactMap { $0 }
         case .story(let pick, _):
             pick.cats.filter { !pick.excludedCats.contains($0.key) }.sorted { $0.key < $1.key }.map(\.value)
@@ -53,7 +58,7 @@ enum MoonEvent: Sendable {
         case .leaderLostLife(let c, _), .died(let c, _): [c]
         case .becameMates(let a, let b): [a, b]
         case .expecting(let m): [m]
-        case .born(let m, let f, let kits): [m, f] + kits
+        case .born(let m, let f, let kits): [m] + [f].compactMap { $0 } + kits
         case .adopted(let parents, let kits): parents + kits
         case .litterFound(let kits, let by): kits + [by]
         }

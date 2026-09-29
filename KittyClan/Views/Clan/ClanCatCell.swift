@@ -32,6 +32,8 @@ struct ClanCatCell: View {
 
     private var accessibilityText: String {
         var parts = [name, cat.rank.label, cat.moonsText]
+        if cat.has("pregnant") { parts.append("expecting kits") }
+        if cat.has("recovering from birth") { parts.append("recovering from birth") }
         if cat.hasVisibleSickness { parts.append("unwell") }
         if cat.hasVisiblePermanentCondition { parts.append("has a lasting condition") }
         return parts.joined(separator: ", ")

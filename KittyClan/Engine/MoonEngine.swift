@@ -12,14 +12,6 @@ struct MoonEngine: Sendable {
     var thoughts: ThoughtLibrary?
     var grief: GriefLibrary?
 
-    private static let canHaveKits: Set<Rank> = [.leader, .deputy, .medicineCat, .mediator, .warrior, .elder]
-    private static let litterWeights: [CatAge: [Int]] = [
-        .youngAdult: [8, 10, 17, 12, 6, 2],
-        .adult: [9, 13, 15, 8, 2, 0],
-        .seniorAdult: [10, 15, 5, 2, 0, 0],
-        .senior: [4, 3, 1, 0, 0, 0],
-    ]
-
     func advance(_ clan: inout Clan, using rng: inout some RandomNumberGenerator) {
         var events: [MoonEvent] = []
         clan.age += 1
@@ -131,7 +123,15 @@ struct MoonEngine: Sendable {
                 events.append(.newMentor(apprentice: cat.id, mentor: mentor))
             }
         }
-        events += promoteDeputy(in: &clan, using: &rng)
+        var warnings: [MoonEvent] = []
+        let promotions = promoteDeputy(in: &clan, using: &rng)
+        if !clan.assignMentors {
+            let mentorless = clan.living.filter { $0.rank.isApprentice && $0.mentor == nil }.map(\.id)
+            if !mentorless.isEmpty { warnings.append(.missingMentors(mentorless)) }
+        }
+        warnings += promotions.filter { if case .deputyVacant = $0 { true } else { false } }
+        events.insert(contentsOf: warnings, at: 0)
+        events += promotions.filter { if case .deputyVacant = $0 { false } else { true } }
         events += mourn(in: &clan, using: &rng)
         generateThoughts(in: &clan, using: &rng)
 
@@ -218,7 +218,8 @@ struct MoonEngine: Sendable {
 
         if cat.rank.isApprentice {
             let maxAge = cat.rank == .medicineApprentice ? 30 : 25
-            if (cat.experience > 50 && cat.moons >= 10) || cat.moons >= maxAge {
+            let ready = clan.twelveMoonGraduation ? cat.moons >= 12 : (cat.experience > 50 && cat.moons >= 10) || cat.moons >= maxAge
+            if ready {
                 graduationInfluence(on: id, from: cat.mentor, in: &clan, using: &rng)
                 let graduate: Rank = switch cat.rank {
                 case .medicineApprentice: .medicineCat
@@ -290,13 +291,15 @@ struct MoonEngine: Sendable {
         }
     }
 
-    /// Picks a random valid mentor, preferring cats without an apprentice.
+    /// Picks a random valid mentor, preferring cats without an apprentice. An invalid mentor is
+    /// always removed, but a new one is only picked while the Clan assigns mentors.
     @discardableResult
     static func assignMentor(to id: UUID, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> UUID? {
         guard let apprentice = clan[id], apprentice.mentor == nil || !canMentor(clan[apprentice.mentor], apprentice) else {
             return nil
         }
         removeMentor(from: id, in: &clan)
+        guard clan.assignMentors else { return nil }
         let valid = clan.living.filter { canMentor($0, apprentice) }
         let free = valid.filter { $0.apprentices.isEmpty && !$0.isNotWorking }
         guard let mentor = (free.isEmpty ? valid : free).randomElement(using: &rng),
@@ -330,6 +333,7 @@ struct MoonEngine: Sendable {
         }
         guard !clan.isAlive(clan.deputy) || clan[clan.deputy]?.rank != .deputy else { return [] }
         clan.deputy = nil
+        guard clan.autoDeputy else { return [.deputyVacant] }
         let warriors = clan.living.filter { $0.rank == .warrior }
         let mentors = warriors.filter { !$0.apprentices.isEmpty || !$0.formerApprentices.isEmpty }
         guard let pick = (mentors.isEmpty ? warriors : mentors).randomElement(using: &rng) else {
@@ -338,156 +342,6 @@ struct MoonEngine: Sendable {
         setRank(.deputy, for: pick.id, in: &clan, using: &rng)
         clan.deputy = pick.id
         return [.deputyAppointed(pick.id)]
-    }
-
-    // MARK: - Mates and kits
-
-    /// Clangen's `check_parents`; only the cat who rolls needs to be working.
-    private func canHaveKits(_ cat: Cat?, in clan: Clan, working: Bool = true) -> Bool {
-        guard let cat, cat.isAlive, !working || !cat.isNotWorking, cat.birthCooldown == 0, cat.moons >= 15, cat.isMateAge else { return false }
-        return Self.canHaveKits.contains(cat.rank) && clan.pregnancies[cat.id] == nil
-    }
-
-    private func pregnancy(for id: UUID, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [MoonEvent] {
-        guard let i = clan.index(of: id) else { return [] }
-
-        if var record = clan.pregnancies[id] {
-            let mother = clan.cats[i]
-            if record.moons == 1 {
-                let weights = Self.litterWeights[mother.age] ?? Self.litterWeights[.adult]!
-                record.litterSize = max(1, weighted(Array(zip(1...6, weights)), &rng))
-                clan.pregnancies[id] = record
-                return []
-            }
-            guard record.moons >= 2 else { return [] }
-            clan.pregnancies[id] = nil
-            clan.cats[i].birthCooldown = 6
-            guard let father = clan[record.otherParent] else { return [] }
-
-            var kits: [Cat] = []
-            var usedPrefixes = Set<String>()
-            for _ in 0..<record.litterSize {
-                var kit = factory.makeKit(mother: mother, father: father, using: &rng)
-                for _ in 0..<10 where usedPrefixes.contains(kit.name.prefix) {
-                    kit.name = factory.names.generate(for: kit.appearance, using: &rng)
-                }
-                usedPrefixes.insert(kit.name.prefix)
-                kits.append(kit)
-            }
-            clan.cats += kits
-            let adoptive = mother.mates.contains(father.id) ? polyParents(for: kits, of: mother, father, in: &clan) : []
-            relationships?.initializeKits(kits.map(\.id), parents: [id, father.id] + adoptive, in: &clan, using: &rng)
-            for kit in kits { rollCongenital(for: kit.id, in: &clan, using: &rng) }
-            clan.cats[i].nextThought = .onBirth
-            if let f = clan.index(of: father.id), clan.cats[f].isAlive { clan.cats[f].nextThought = .onBirth }
-            var events: [MoonEvent] = [.born(mother: id, father: father.id, kits: kits.map(\.id))]
-            if oneIn(40, &rng) { events += loseLifeOrDie(id, cause: .childbirth, in: &clan, using: &rng) }
-            return events
-        }
-
-        if clan.cats[i].birthCooldown > 0 {
-            clan.cats[i].birthCooldown -= 1
-            return []
-        }
-
-        let cat = clan.cats[i]
-        guard canHaveKits(cat, in: clan) else { return [] }
-        let partners = cat.mates.compactMap { clan[$0] }.filter { $0.sex != cat.sex && canHaveKits($0, in: clan, working: false) }
-        if partners.isEmpty, clan.sameSexAdoption {
-            let sameSex = cat.mates.compactMap { clan[$0] }.filter { $0.sex == cat.sex && canHaveKits($0, in: clan, working: false) }
-            guard let partner = sameSex.randomElement(using: &rng), oneIn(kitChance(cat, partner, in: clan), &rng) else { return [] }
-            return adoptLitter(by: id, with: partner.id, in: &clan, using: &rng)
-        }
-        guard let partner = partners.randomElement(using: &rng),
-              oneIn(kitChance(cat, partner, in: clan), &rng)
-        else { return [] }
-
-        let (mother, father) = cat.sex == .female ? (cat.id, partner.id) : (partner.id, cat.id)
-        clan.pregnancies[mother] = Pregnancy(otherParent: father)
-        return [.expecting(mother: mother)]
-    }
-
-    /// Clangen's poly parenting: the parents' other living mates adopt the litter, unless
-    /// they're already the kits' relatives.
-    func polyParents(for kits: [Cat], of mother: Cat, _ father: Cat, in clan: inout Clan) -> [UUID] {
-        guard let first = kits.first else { return [] }
-        let others = (mother.mates + father.mates).filter { ![mother.id, father.id].contains($0) && clan.isAlive($0) }
-        var adoptive: [UUID] = []
-        let relatives = clan.relatives(of: first.id)
-        for mate in others where !adoptive.contains(mate) {
-            if let m = clan.index(of: mate) { clan.cats[m].nextThought = .onBirth }
-            if !relatives.contains(mate) { adoptive.append(mate) }
-        }
-        for kit in kits {
-            if let k = clan.index(of: kit.id) { clan.cats[k].adoptiveParents = adoptive }
-        }
-        return adoptive
-    }
-
-    /// Clangen's `handle_adoption`: a pair who can't have kits together finds an abandoned
-    /// litter. The kits' blood parent is a dead loner or kittypet; the pair and all their
-    /// living mates adopt them.
-    func adoptLitter(by id: UUID, with partner: UUID, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [MoonEvent] {
-        guard let i = clan.index(of: id), let other = clan[partner] else { return [] }
-        let cat = clan.cats[i]
-        let weights = Self.litterWeights[cat.age] ?? Self.litterWeights[.adult]!
-        let count = max(1, weighted(Array(zip(1...6, weights)), &rng))
-
-        let social: Cat.Origin = pick([.loner, .kittypet], &rng)
-        var birthParent = factory.make(rank: .warrior, moons: Int.random(in: 15...120, using: &rng), origin: social, using: &rng)
-        birthParent.name = factory.names.outsiderName(for: social, using: &rng)
-        clan.outsiders.append(birthParent)
-        clan.sendToAfterlife(birthParent.id, history: nil, using: &rng)
-
-        var adoptive = [id, partner]
-        for mate in cat.mates + other.mates where clan.isAlive(mate) && !adoptive.contains(mate) { adoptive.append(mate) }
-
-        var kits: [Cat] = []
-        var usedPrefixes = Set<String>()
-        for _ in 0..<count {
-            var kit = factory.make(rank: .newborn, moons: 0, origin: .clanborn, using: &rng)
-            for _ in 0..<10 where usedPrefixes.contains(kit.name.prefix) {
-                kit.name = factory.names.generate(for: kit.appearance, using: &rng)
-            }
-            usedPrefixes.insert(kit.name.prefix)
-            kit.parents = [birthParent.id]
-            kit.adoptiveParents = adoptive
-            kit.backstory = "abandoned\(Int.random(in: 1...4, using: &rng))"
-            kits.append(kit)
-        }
-        clan.cats += kits
-        relationships?.initializeKits(kits.map(\.id), parents: adoptive, in: &clan, using: &rng)
-        for kit in kits { rollCongenital(for: kit.id, in: &clan, using: &rng) }
-        clan.cats[i].birthCooldown = 6
-        clan.cats[i].nextThought = .onBirth
-        if let p = clan.index(of: partner) { clan.cats[p].nextThought = .onBirth }
-        return [.adopted(parents: [id, partner], kits: kits.map(\.id))]
-    }
-
-    /// Clangen's `get_balanced_kit_chance` for a mated pair, as a 1-in-N chance. Both mates roll each moon.
-    func kitChance(_ first: Cat, _ second: Cat, in clan: Clan) -> Int {
-        var odds = Int(Int(80 * 0.7) * 7 / 10)
-        let size = clan.living.count
-        if size < 10 { odds /= 2 } else if size > 30 { odds = Int(Double(odds) * Double(size) / 30) }
-        if let relationships {
-            switch relationships.compatibility(first, second) {
-            case .positive: odds = Int(Double(odds) * 0.85)
-            case .negative: odds = Int(Double(odds) * 1.15)
-            case .neutral: break
-            }
-        }
-        let there = clan.relationship(from: first.id, to: second.id), back = clan.relationship(from: second.id, to: first.id)
-        for value in [\Relationship.romance, \.comfort, \.trust] {
-            let average = Double((there?[keyPath: value] ?? 0) + (back?[keyPath: value] ?? 0)) / 2
-            let cut = average >= 85 ? 0.3 : average >= 55 ? 0.2 : average >= 35 ? 0.1 : 0
-            odds -= Int(Double(odds) * cut)
-        }
-        if size > 0, clan.living.map(\.moons).reduce(0, +) / size > 80 { odds = Int(Double(odds) * 0.8) }
-        odds += Int(Double(odds) * Double(clan.children(of: first.id).count) * 0.1)
-        let biggest = clan.biggestFamily
-        if biggest.count > 1, biggest.contains(first.id) || biggest.contains(second.id) { odds = Int(Double(odds) * 1.7) }
-        if Double(clan.relatives(of: first.id).count) < Double(size) / 15 { odds = Int(Double(odds) * 0.7) }
-        return max(1, odds)
     }
 
     // MARK: - New cats
@@ -526,6 +380,9 @@ struct MoonEngine: Sendable {
         let oldAge = pow(1.0045, Double(cat.moons - 150)) - 1
         if cat.moons >= 300 || (oldAge > 0 && Double.random(in: 0..<1, using: &rng) <= oldAge) {
             return die(id, cause: .oldAge, in: &clan, using: &rng)
+        }
+        if clan.disasters, oneIn(Self.disasterChance, &rng) {
+            return massDeath(by: id, in: &clan, using: &rng)
         }
         if !cat.isNotWorking, oneIn(badWar ? 170 : 500, &rng) {
             return die(id, cause: .misfortune, in: &clan, using: &rng)
@@ -581,7 +438,8 @@ struct MoonEngine: Sendable {
         in clan: inout Clan, using rng: inout some RandomNumberGenerator
     ) -> [MoonEvent] {
         guard let i = clan.index(of: id) else { return [] }
-        clan.cats[i].conditions.removeAll { $0.kind != .permanent }
+        let keepsPregnancy = clan.leader == id && clan.leaderLives > 1
+        clan.cats[i].conditions.removeAll { $0.kind != .permanent && !(keepsPregnancy && $0.name == "pregnant") }
         clan.cats[i].nextThought = .onDeath
         let history = history ?? Self.defaultHistory[cause]
         if clan.leader == id {

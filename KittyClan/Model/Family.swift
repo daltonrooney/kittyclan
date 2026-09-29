@@ -106,6 +106,16 @@ extension Clan {
         return result
     }
 
+    /// Clangen's `get_relatives`, with first cousins when `cousins` is set.
+    func relatives(of id: UUID, cousins: Bool) -> Set<UUID> {
+        cousins ? relatives(of: id).union(self.cousins(of: id)).subtracting([id]) : relatives(of: id)
+    }
+
+    /// Clangen's `biggest_family_is_big`: the family holds more than a tenth of the living Clan.
+    func isBig(family: Set<UUID>) -> Bool {
+        Double(family.count) > Double(living.count) / 10
+    }
+
     /// Clangen's biggest family: the living cat with the most relatives, and those relatives.
     var biggestFamily: Set<UUID> {
         var best: Set<UUID> = []

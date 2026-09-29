@@ -34,6 +34,9 @@ struct CatCondition: Codable, Hashable, Sendable {
 
     /// False while a condition the cat was born with hasn't shown yet.
     var isRevealed: Bool { !(bornWith && moonsUntil >= 0) }
+
+    /// Clangen's `pregnant` and `recovering from birth` injuries.
+    var isBirthCondition: Bool { kind == .injury && ["pregnant", "recovering from birth"].contains(name) }
 }
 
 extension Cat {

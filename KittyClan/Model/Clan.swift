@@ -11,9 +11,12 @@ struct CatPair: Hashable, Codable, Sendable {
 }
 
 struct Pregnancy: Codable, Hashable, Sendable {
-    var otherParent: UUID
+    /// The other blood parent; nil when it's unknown.
+    var otherParent: UUID?
     var moons = 0
     var litterSize = 0
+    /// Whether the announcement said outright that the kits come from an affair.
+    var affairKnown: Bool?
 }
 
 enum Season: String, Codable, CaseIterable, Sendable {
@@ -107,6 +110,28 @@ struct Clan: Codable, Sendable {
     var allowMurder = true
     /// Clangen's `same sex adoption` setting: mates who can't have kits together may find a litter to adopt.
     var sameSexAdoption = false
+    /// Clangen's `same sex birth`: any cat can carry kits, so every pair can have them.
+    var sameSexBirth = false
+    /// Clangen's `affair`: mated cats may have kits with a cat who isn't their mate.
+    var affairs = false
+    /// Clangen's `unmated parentage`: unmated cats may have kits together.
+    var unmatedParentage = false
+    /// Clangen's `single parentage`: kits may have an unknown second parent.
+    var singleParentage = false
+    /// Clangen's `romantic with former mentor`.
+    var romanceWithFormerMentor = true
+    /// Clangen's `first cousin mates`.
+    var firstCousinMates = false
+    /// Clangen's `12_moon_graduation`: apprentices graduate at 12 moons whatever their experience.
+    var twelveMoonGraduation = false
+    /// Clangen's `assign_mentors`: apprentices without a mentor get one each moon.
+    var assignMentors = true
+    /// Clangen's `deputy`: the leader names a new deputy whenever the post is empty.
+    var autoDeputy = false
+    /// Clangen's `retirement`: cats never retire because of a permanent condition.
+    var noConditionRetirement = false
+    /// Clangen's `disasters`: mass-death events can strike the Clan.
+    var disasters = false
 
     var displayName: String { prefix + "Clan" }
 
@@ -176,8 +201,15 @@ struct Clan: Codable, Sendable {
 
     /// Clangen's `is_related` with cousins included: parents, children, siblings,
     /// grandparents, grandchildren, aunts, uncles, nieces, nephews and cousins.
-    func areRelated(_ a: UUID, _ b: UUID) -> Bool {
-        !family(of: a).isDisjoint(with: family(of: b))
+    /// Without cousins, first cousins don't count.
+    func areRelated(_ a: UUID, _ b: UUID, cousins: Bool = true) -> Bool {
+        guard !family(of: a).isDisjoint(with: family(of: b)) else { return false }
+        return cousins || relatives(of: a).contains(b) || relatives(of: b).contains(a)
+    }
+
+    /// Whether the Clan's `first cousin mates` setting lets these two be mates.
+    func areRelatedForMating(_ a: UUID, _ b: UUID) -> Bool {
+        areRelated(a, b, cousins: !firstCousinMates)
     }
 }
 
@@ -221,5 +253,17 @@ extension Clan {
         pendingEvents = try c.decodeIfPresent([PendingEvent].self, forKey: .pendingEvents) ?? []
         allowMurder = try c.decodeIfPresent(Bool.self, forKey: .allowMurder) ?? true
         sameSexAdoption = try c.decodeIfPresent(Bool.self, forKey: .sameSexAdoption) ?? false
+        sameSexBirth = try c.decodeIfPresent(Bool.self, forKey: .sameSexBirth) ?? false
+        affairs = try c.decodeIfPresent(Bool.self, forKey: .affairs) ?? false
+        unmatedParentage = try c.decodeIfPresent(Bool.self, forKey: .unmatedParentage) ?? false
+        singleParentage = try c.decodeIfPresent(Bool.self, forKey: .singleParentage) ?? false
+        romanceWithFormerMentor = try c.decodeIfPresent(Bool.self, forKey: .romanceWithFormerMentor) ?? true
+        firstCousinMates = try c.decodeIfPresent(Bool.self, forKey: .firstCousinMates) ?? false
+        twelveMoonGraduation = try c.decodeIfPresent(Bool.self, forKey: .twelveMoonGraduation) ?? false
+        assignMentors = try c.decodeIfPresent(Bool.self, forKey: .assignMentors) ?? true
+        // Saves from before this setting always named a deputy.
+        autoDeputy = try c.decodeIfPresent(Bool.self, forKey: .autoDeputy) ?? true
+        noConditionRetirement = try c.decodeIfPresent(Bool.self, forKey: .noConditionRetirement) ?? false
+        disasters = try c.decodeIfPresent(Bool.self, forKey: .disasters) ?? false
     }
 }

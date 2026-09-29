@@ -265,6 +265,14 @@ final class AppModel {
         isLivingClanCat(cat) && cat.moons >= 12
     }
 
+    /// Clangen's per-cat "Limit romantic interactions and mate changes" toggle.
+    func setNoMates(_ on: Bool, for id: Cat.ID) async {
+        guard var current = clan, let i = current.index(of: id), !isAdvancing else { return }
+        current.cats[i].noMates = on
+        clan = current
+        await save()
+    }
+
     func mateCandidates(for cat: Cat, singleOnly: Bool, kitsOnly: Bool) -> [Cat] {
         clan?.mateCandidates(for: cat.id, singleOnly: singleOnly, kitsOnly: kitsOnly) ?? []
     }
@@ -818,7 +826,8 @@ extension AppModel {
     /// `-deaths N` (sends N living warriors, apprentices or elders to the afterlife),
     /// `-afterlife YES|starclan|dark_forest|unknown_residence` (opens the afterlife), `-afterlifeSort rank|death|name`,
     /// `-afterlifeMoves N` (moves the `-showCat` ghost on N afterlives), `-kill YES|all` (kills the `-showCat` cat; `all` takes every life),
-    /// `-adopt YES` (the youngest cat who can be adopted gets its first candidate as an adoptive parent).
+    /// `-adopt YES` (the youngest cat who can be adopted gets its first candidate as an adoptive parent),
+    /// `-pregnant YES|N` (a she-cat becomes pregnant, then N moons pass; `-showCat pregnant` opens her).
     /// `-autofound YES` replaces the last played Clan; `-autofound new` founds into a new save slot.
     /// `-mediator YES` makes the first warrior a mediator,
     /// `-sheet mediate|focus|settings` opens that sheet (without `-showCat`), and `-chooser YES` shows the Clan chooser.
@@ -875,6 +884,7 @@ extension AppModel {
         if defaults.bool(forKey: "mediator"), let warrior = clan?.living.first(where: { $0.rank == .warrior && !$0.isNotWorking }) {
             await changeRank(.mediator, for: warrior.id)
         }
+        await debugPregnancy()
         await debugOtherClans()
         await debugAfterlife()
         if defaults.bool(forKey: "feed") { await feed(hungryCats.map(\.id)) }
@@ -957,6 +967,26 @@ extension AppModel {
         }
     }
 
+    /// `-pregnant YES` makes the first she-cat who could have kits pregnant; `-pregnant N` then
+    /// advances N moons.
+    private func debugPregnancy() async {
+        guard let request = UserDefaults.standard.string(forKey: "pregnant"), let assets, var current = clan,
+              let queen = current.living.first(where: {
+                  $0.sex == .female && $0.moons >= 15 && MoonEngine.canHaveKits.contains($0.rank)
+                      && !$0.isNotWorking && current.pregnancies[$0.id] == nil
+              })
+        else { return }
+        var rng = SystemRandomNumberGenerator()
+        let partner = queen.mates.first ?? current.living.first { $0.sex == .male && $0.moons >= 15 }?.id
+        _ = assets.engine.conceive(queen.id, with: partner, in: &current, using: &rng)
+        if let moons = Int(request), moons > 0 {
+            current = await Self.advance(current, moons: moons, engine: assets.engine)
+            latestMoon = current.age
+        }
+        clan = current
+        await save()
+    }
+
     private func debugPatrol() async {
         let defaults = UserDefaults.standard
         guard let request = defaults.string(forKey: "patrol") else { return }
@@ -996,6 +1026,7 @@ extension AppModel {
             return (clan.living + clan.outsiders.filter(\.isAlive)).first { $0.appearance.accessories.contains { index.collarStyle(of: $0) != nil } }
         }
         if query == "family" { return clan.living.max { clan.family(of: $0.id).count < clan.family(of: $1.id).count } }
+        if query == "pregnant" { return clan.living.first { $0.hasBirthCondition } }
         if query == "sick" {
             return clan.living.max { $0.visibleConditions.count < $1.visibleConditions.count }
         }

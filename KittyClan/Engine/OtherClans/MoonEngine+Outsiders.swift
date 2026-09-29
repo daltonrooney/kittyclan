@@ -37,6 +37,7 @@ extension MoonEngine {
         if clan.leader == id { clan.leader = nil }
         if clan.deputy == id { clan.deputy = nil }
         clan.pregnancies[id] = nil
+        cat.conditions.removeAll { $0.name == "pregnant" && $0.kind == .injury }
         return cat
     }
 
@@ -209,8 +210,24 @@ extension MoonEngine {
         }
         guard !created.flatMap({ $0 }).isEmpty else { return nil }
         if !suffixes.isEmpty { pick.template += " " + suffixes.joined(separator: " ") }
+        recoverFromBirth(created, in: &clan, using: &rng)
         return joinedAny
     }
+    /// Clangen gives a parent who arrives with a litter under three moons old `recovering from birth`.
+    private func recoverFromBirth(_ created: [[UUID]], in clan: inout Clan, using rng: inout some RandomNumberGenerator) {
+        for litter in created {
+            guard let kit = litter.first.flatMap({ clan[$0] }), kit.moons < 3 else { continue }
+            for group in created {
+                guard let parent = group.first.flatMap({ clan[$0] }), parent.id != kit.id,
+                      parent.sex == .female || clan.sameSexBirth,
+                      kit.parents.contains(parent.id), parent.isAlive, !parent.has("recovering from birth")
+                else { continue }
+                getInjured(parent.id, "recovering from birth", in: &clan, using: &rng)
+                break
+            }
+        }
+    }
+
     /// Clangen's `create_new_cat_block`.
     private func createNewCats(_ attributes: [String], earlier: [[UUID]], event: StoryPick, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> (ids: [UUID], joined: Bool) {
         func value(_ prefix: String) -> String? {
@@ -254,7 +271,8 @@ extension MoonEngine {
         let litter = attributes.contains("litter")
         if litter { rank = .kitten }
 
-        let sex: Cat.Sex? = attributes.contains("male") ? .male : (attributes.contains("female") || attributes.contains("can_birth")) ? .female : nil
+        let canBirthFemale = attributes.contains("can_birth") && !clan.sameSexBirth
+        let sex: Cat.Sex? = attributes.contains("male") ? .male : (attributes.contains("female") || canBirthFemale) ? .female : nil
         if attributes.contains("exists"),
            let existing = clan.outsiders.first(where: { other in
                other.isAlive && other.isNear && !other.isExiled && other.social == social

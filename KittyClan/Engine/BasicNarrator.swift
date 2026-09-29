@@ -45,7 +45,8 @@ struct BasicNarrator: Narrator {
         case .expecting(let mother):
             "\(name(mother, in: clan)) is expecting kits."
         case .born(let mother, let father, let kits):
-            "\(name(mother, in: clan)) had a litter of \(kits.count) with \(name(father, in: clan))."
+            father.map { "\(name(mother, in: clan)) had a litter of \(kits.count) with \(name($0, in: clan))." }
+                ?? "\(name(mother, in: clan)) had a litter of \(kits.count)."
         case .adopted(let parents, let kits):
             "\(parents.map { name($0, in: clan) }.joined(separator: " and ")) found a litter of \(kits.count) kits and \(parents.count == 1 ? "decides" : "decide") to adopt them."
         case .joined(let cat, _):
@@ -54,6 +55,10 @@ struct BasicNarrator: Narrator {
             "A litter of \(kits.count) kits has been taken in by the Clan."
         case .noDeputy:
             "There are no cats fit to become deputy."
+        case .deputyVacant:
+            "\(clan.displayName) has no deputy!"
+        case .missingMentors(let apprentices):
+            apprentices.count == 1 ? "An apprentice has no mentor!" : "\(apprentices.count) apprentices have no mentor!"
         case .lowPrey:
             "\(clan.displayName) doesn't have enough prey for next moon!"
         case .story(let pick, _):

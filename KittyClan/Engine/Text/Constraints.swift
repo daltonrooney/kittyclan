@@ -176,6 +176,7 @@ struct Constraint: Sendable {
         "classic", "no_body", "all_lives", "some_lives", "lives_remain", "high_lives", "mid_lives", "low_lives", "romance",
         "clan_wide",
         "adoption",
+        "lost",
     ]
     private static let blockedTokens = [
         "POI", "mur_c", "acc_", "_list", "multi_cat", "given_herb", "n_c", "r_c0", "r_c1", "r_c2", "r_c3",
@@ -316,13 +317,19 @@ struct RelationshipRule: Sendable {
 }
 
 extension Clan {
-    /// Clangen's `is_potential_mate`.
-    func isPotentialMate(_ a: Cat, _ b: Cat, forLoveInterest: Bool = false) -> Bool {
-        guard a.id != b.id, a.isAlive == b.isAlive, !areRelated(a.id, b.id) else { return false }
+    /// Clangen's `is_potential_mate`, following the Clan's mate settings.
+    func isPotentialMate(_ a: Cat, _ b: Cat, forLoveInterest: Bool = false, ignoreNoMates: Bool = false) -> Bool {
+        guard a.id != b.id, a.isAlive == b.isAlive, !areRelatedForMating(a.id, b.id) else { return false }
+        if !ignoreNoMates, a.noMates || b.noMates { return false }
         if !forLoveInterest, a.moons < 14 || b.moons < 14 { return false }
         if a.age != b.age, abs(a.moons - b.moons) > 41 { return false }
         if (!a.isMateAge || !b.isMateAge), a.age != b.age { return false }
         if a.mentor == b.id || b.mentor == a.id { return false }
-        return true
+        return romanceWithFormerMentor || !isFormerMentor(a, b)
+    }
+
+    /// Either cat trained the other.
+    func isFormerMentor(_ a: Cat, _ b: Cat) -> Bool {
+        a.formerApprentices.contains(b.id) || b.formerApprentices.contains(a.id)
     }
 }

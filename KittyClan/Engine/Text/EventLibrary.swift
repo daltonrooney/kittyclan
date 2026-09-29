@@ -95,6 +95,25 @@ struct LeaderDenOutcome: Sendable {
     }
 }
 
+/// Clangen's pregnancy text (`conditions/pregnancy.json` and its `.en` strings).
+struct PregnancyText: Sendable {
+    /// Announcements and severity lines, e.g. `announcement_affair`, `major_severity`.
+    let lines: [String: [String]]
+    /// `small`, `large` or `unsure`.
+    let litterGuess: [String: [String]]
+    /// Birth outcomes, e.g. `two_parents`, `affair_secret`, `death`, `difficult_birth`.
+    let birth: [String: [String]]
+    /// Single strings such as `pregnant_secret` and `mate_claims_kits`, with `%{…}` slots.
+    let strings: [String: String]
+
+    init(_ json: [String: Any], english: [String: Any]) {
+        lines = json.compactMapValues { $0 as? [String] }
+        litterGuess = (json["litter_guess"] as? [String: Any] ?? [:]).compactMapValues { $0 as? [String] }
+        birth = (json["birth"] as? [String: Any] ?? [:]).compactMapValues { $0 as? [String] }
+        strings = english.compactMapValues { $0 as? String }
+    }
+}
+
 struct LeaderDenText: Sendable {
     let clanSuccess: [LeaderDenOutcome]
     let clanFail: [LeaderDenOutcome]
@@ -161,6 +180,7 @@ struct EventLibrary: Sendable {
     let outsiderDeaths: [String: [String]]
     let announcements: [String]
     let twoParentBirths: [String]
+    let pregnancy: PregnancyText
     let kitAmount: [String: String]
     /// The `event_id` of every ceremony and short event that loaded.
     let eventIDs: Set<String>
@@ -223,9 +243,11 @@ struct EventLibrary: Sendable {
         )
 
         let pregnancy = try load("pregnancy.json") as? [String: Any] ?? [:]
+        let pregnancyEnglish = try load("pregnancy.en.json") as? [String: Any] ?? [:]
         announcements = pregnancy["announcement"] as? [String] ?? []
         twoParentBirths = (pregnancy["birth"] as? [String: Any])?["two_parents"] as? [String] ?? []
-        kitAmount = (try load("pregnancy.en.json") as? [String: Any])?["kit_amount"] as? [String: String] ?? [:]
+        kitAmount = pregnancyEnglish["kit_amount"] as? [String: String] ?? [:]
+        self.pregnancy = PregnancyText(pregnancy, english: pregnancyEnglish)
 
         let shortEvents = [deaths, misc, miscBySubType, accessoryEvents, injuryEvents, newCatEvents]
             .flatMap { $0.values.flatMap { $0.values.flatMap { $0.map(\.id) } } }
@@ -317,6 +339,17 @@ struct EventLibrary: Sendable {
     /// How many misc events of a sub-type loaded.
     func miscCount(subType: String) -> Int { miscBySubType[subType]?.values.reduce(0) { $0 + $1.count } ?? 0 }
     var murderCount: Int { deaths["murder"]?.values.reduce(0) { $0 + $1.count } ?? 0 }
+
+    var massDeathCount: Int { deaths["mass_death"]?.values.reduce(0) { $0 + $1.count } ?? 0 }
+
+    /// A disaster (Clangen's `mass_death` death events) set off by this cat, with the living
+    /// Clan cats who fit the event's `m_c` and could be caught up in it.
+    func massDeathEvent(for cat: Cat, in clan: Clan, context: Context, using rng: inout some RandomNumberGenerator) -> (pick: StoryPick, pool: [UUID])? {
+        guard let events = deaths["mass_death"], let pick = shortEvent(from: events, for: cat, in: clan, context: context, using: &rng),
+              let event = events.values.joined().first(where: { $0.text == pick.template })
+        else { return nil }
+        return (pick, clan.living.filter { event.main.matches($0, allowNewborn: true) }.map(\.id))
+    }
 
     /// A murder story for this victim and murderer (Clangen's `murder` death events).
     func murderEvent(victim: Cat, murderer: UUID, in clan: Clan, context: Context, using rng: inout some RandomNumberGenerator) -> StoryPick? {
@@ -501,6 +534,7 @@ private struct ShortEvent: Sendable {
     init?(_ json: [String: Any]) {
         let supplyJSON = json["supplies"] as? [[String: Any]] ?? []
         let supplies = supplyJSON.compactMap(SupplyBlock.init)
+        let massDeath = (json["sub_type"] as? [String]) == ["mass_death"]
         guard Set(json.keys).isSubset(of: Self.keys), supplies.count == supplyJSON.count,
               let text = (json["event_text"] ?? json["death_text"]) as? String,
               let blocks = Optional(json["new_cat"] as? [[String]] ?? []),
@@ -508,7 +542,7 @@ private struct ShortEvent: Sendable {
               let newAccessory = Optional(json["new_accessory"] as? [String] ?? []),
               Constraint.textIsSupported(text, allowing: Set(
                   ["m_c", "r_c", "o_c_n", "mur_c"] + blocks.indices.flatMap { ["n_c:\($0)", "n_c_pre:\($0)"] }
-                      + (newAccessory.isEmpty ? [] : ["acc_singular", "acc_plural"])
+                      + (newAccessory.isEmpty ? [] : ["acc_singular", "acc_plural"]) + (massDeath ? ["multi_cat"] : [])
               ))
         else { return nil }
         self.newAccessory = newAccessory
