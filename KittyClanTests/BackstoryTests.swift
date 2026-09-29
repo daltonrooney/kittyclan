@@ -144,7 +144,7 @@ final class BackstoryTests: XCTestCase {
     func testPatrolsCreateOtherClanCatsAndBackstories() throws {
         let patrols = Self.assets.patrols
         var otherClanCats = 0, backstoried = 0
-        for seed in 0..<12 as Range<UInt64> {
+        for seed in 0..<40 as Range<UInt64> {
             var (clan, rng) = clan(seed: 200 + seed)
             for _ in 0..<30 {
                 for type in [PatrolType.hunting, .border, .training] {
