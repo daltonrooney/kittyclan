@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// An outsider's sprite, name, way of life, and whether they left the Clan.
+/// An outsider's sprite, name, way of life (or Clan), and whether they left the Clan.
 struct OutsiderCell: View {
     let cat: Cat
     let name: String
+    let label: String
     var isSelected = false
     let action: () -> Void
 
@@ -21,7 +22,7 @@ struct OutsiderCell: View {
                     .font(.headline)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                Text(cat.socialLabel)
+                Text(label)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 OutsiderTags(cat: cat)
@@ -30,7 +31,7 @@ struct OutsiderCell: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([name, cat.socialLabel, cat.outsiderNote].compactMap(\.self).joined(separator: ", "))
+        .accessibilityLabel([name, label, cat.outsiderNote].compactMap(\.self).joined(separator: ", "))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }

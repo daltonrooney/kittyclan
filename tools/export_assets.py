@@ -205,6 +205,7 @@ def export_text():
             lang / "conditions" / "pregnancy.json",
             lang / "conditions" / "pregnancy.en.json",
             CLANGEN / "resources" / "dicts" / "traits" / "trait_ranges.json",
+            CLANGEN / "resources" / "dicts" / "backstories.json",
         ],
     }
     rel = lang / "events" / "relationship_events"

@@ -18,6 +18,9 @@ struct Constraint: Sendable {
     var pastStatuses: [String]?
     /// Clangen's `current_exp`: experience levels such as "prepared".
     var experienceLevels: [String]?
+    /// Clangen's `backstory`: keys (categories expanded) the cat must have, or must not when `excludesBackstories`.
+    var backstories: Set<String>?
+    var excludesBackstories = false
     /// Legacy short-event `relationship_status` tokens, checked by the caller against the other cat.
     var relationshipStatus: [String] = []
 
@@ -49,6 +52,12 @@ struct Constraint: Sendable {
                 guard relationshipStatus.allSatisfy(RelationshipRule.isSupported) else { return nil }
             case "past_status": pastStatuses = value as? [String]
             case "current_exp": experienceLevels = value as? [String]
+            case "backstory":
+                let list = value as? [String] ?? []
+                guard !list.isEmpty else { continue }
+                excludesBackstories = list.contains { $0.hasPrefix("-") }
+                guard let expanded = Backstories.bundled.expand(list.map { String($0.drop { $0 == "-" }) }) else { return nil }
+                backstories = expanded
             case "dies":
                 continue
             default:
@@ -71,6 +80,14 @@ struct Constraint: Sendable {
             && hasFormerApprentice.map { $0 == !cat.formerApprentices.isEmpty } ?? true
             && Self.listAllows(experienceLevels, PatrolSlot.experienceLevel(cat.experience))
             && pastStatusHolds(for: cat)
+            && backstoryHolds(for: cat)
+    }
+
+    /// Clangen's `_check_cat_backstory`: one "-" entry makes the whole list exclusions.
+    func backstoryHolds(for cat: Cat) -> Bool {
+        guard let backstories else { return true }
+        let has = cat.backstory.map(backstories.contains) ?? false
+        return has != excludesBackstories
     }
 
     /// Clangen's `_check_cat_status_history`: any rank held before other than the current one.

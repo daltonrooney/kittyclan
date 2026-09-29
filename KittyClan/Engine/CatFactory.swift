@@ -57,7 +57,7 @@ struct CatFactory: Sendable {
         let looks = appearance.generate(female: sex == .female, age: age, using: &rng)
         let name = names.generate(for: looks, using: &rng)
         let gender = Self.genderAlign(for: sex, baby: baby, using: &rng)
-        return Cat(
+        var cat = Cat(
             id: UUID(),
             name: name,
             sex: sex,
@@ -71,6 +71,8 @@ struct CatFactory: Sendable {
             origin: origin,
             experience: Self.startingExperience(moons: moons, using: &rng)
         )
+        cat.backstory = Backstories.bundled.random(for: origin, baby: baby, using: &rng)
+        return cat
     }
 
     /// A newborn whose looks are inherited from its parents.
@@ -80,7 +82,7 @@ struct CatFactory: Sendable {
             female: sex == .female, age: .newborn,
             parents: [mother.appearance, father.appearance], using: &rng
         )
-        return Cat(
+        var kit = Cat(
             id: UUID(),
             name: names.generate(for: looks, using: &rng),
             sex: sex,
@@ -93,6 +95,8 @@ struct CatFactory: Sendable {
             origin: .clanborn,
             parents: [mother.id, father.id]
         )
+        kit.backstory = "clanborn"
+        return kit
     }
 
     /// A loner, rogue or kittypet who asks to join. Half keep their outsider name.

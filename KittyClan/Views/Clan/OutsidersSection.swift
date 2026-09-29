@@ -37,7 +37,7 @@ struct OutsidersSection: View {
                 if isExpanded {
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(cats) { cat in
-                            OutsiderCell(cat: cat, name: model.displayName(cat)) {
+                            OutsiderCell(cat: cat, name: model.displayName(cat), label: model.socialLabel(of: cat)) {
                                 model.selectedCat = cat
                             }
                         }

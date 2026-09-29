@@ -405,6 +405,30 @@ final class AppModel {
         return assets?.afterlifeText.backstory(of: cat, in: clan)
     }
 
+    /// The backstory paragraph on a cat's profile.
+    func profileBackstory(of cat: Cat) -> String? {
+        guard let clan else { return nil }
+        return assets?.afterlifeText.profileBackstory(of: cat, in: clan)
+    }
+
+    /// e.g. "formerly a loner" or "originally from another Clan".
+    func backstoryLabel(of cat: Cat) -> String? {
+        assets?.afterlifeText.backstoryLabel(of: cat)
+    }
+
+    /// The neighbouring Clan a cat belongs to or came from.
+    func otherClanName(of cat: Cat) -> String? {
+        clan?.otherClan(cat.otherClan)?.name
+    }
+
+    /// An outsider's way of life, or their rank and Clan for another Clan's cat, e.g. "RiverClan warrior".
+    func socialLabel(of cat: Cat) -> String {
+        if cat.belongsToOtherClan, let name = otherClanName(of: cat) {
+            return "\(name) \(cat.rank.rawValue)"
+        }
+        return cat.socialLabel
+    }
+
     /// How the cat died, one line per death, then how the afterlife received them.
     func deathHistory(of cat: Cat) -> [String] {
         guard let clan, let text = assets?.afterlifeText else { return [] }
@@ -626,7 +650,9 @@ final class AppModel {
     }
 
     private func open(_ id: UUID) async throws {
-        guard let saved = try await slots.load(id) else { throw CocoaError(.fileNoSuchFile) }
+        guard var saved = try await slots.load(id) else { throw CocoaError(.fileNoSuchFile) }
+        var rng = SystemRandomNumberGenerator()
+        MoonEngine.fillMissingBackstories(in: &saved, using: &rng)
         closeClan()
         clan = saved
         slotID = id
@@ -777,6 +803,7 @@ extension AppModel {
     /// `-afterlife YES|starclan|dark_forest|unknown_residence` (opens the afterlife), `-afterlifeSort rank|death|name`,
     /// `-adopt YES` (the youngest cat who can be adopted gets its first candidate as an adoptive parent).
     /// `-autofound YES` replaces the last played Clan; `-autofound new` founds into a new save slot.
+    /// `-otherClanCats YES` meets a cat of the first neighbouring Clan and has another join from it.
     /// `-mediator YES` makes the first warrior a mediator,
     /// `-sheet mediate|focus|settings` opens that sheet (without `-showCat`), and `-chooser YES` shows the Clan chooser.
     /// The clan screen reads `-clanView camp|list` and `-denLabels YES|NO` straight from its `@AppStorage`.
@@ -873,6 +900,17 @@ extension AppModel {
             if warriors.count > 1 { assets.engine.loseCat(warriors[1].id, in: &current, using: &rng) }
             clan = current
         }
+        if defaults.bool(forKey: "otherClanCats"), var current = clan, let other = current.otherClans.first, let met = current.living.first {
+            var rng = SystemRandomNumberGenerator()
+            var counts: [UUID: Int] = [:]
+            for block in [["clancat", "meeting", "age:adult"], ["clancat", "status:warrior"]] {
+                var pick = StoryPick(template: "", cats: ["m_c": met.id])
+                pick.otherClan = other.id
+                pick.newCats = [block]
+                assets.engine.addNewCats(to: &pick, in: &current, counts: &counts, using: &rng)
+            }
+            clan = current
+        }
         if defaults.bool(forKey: "leaderDenPlan"), let current = clan {
             if let other = current.otherClans.first, let action = DenAction(rawValue: MoonEngine.leaderDenActions(for: other.standing).1) {
                 await planLeaderDen(action, target: .clan(other.id))
@@ -933,11 +971,13 @@ extension AppModel {
     }
 
     /// `-showCat first` opens the leader; `-showCat guide` opens the guide; `-showCat dead` opens the most recently dead Clan cat;
-    /// `-showCat outsider` opens the first nearby outsider; `-showCat sick` opens the cat with the most known conditions; `-showCat apprentice` the first apprentice; `-showCat family` the living cat with the most relatives; `-showCat adopted` the first cat with an adoptive parent; any other value opens the first cat whose name starts with it.
+    /// `-showCat outsider` opens the first nearby outsider; `-showCat otherclan` the first cat of another Clan; `-showCat fromotherclan` the first Clan cat who came from one; `-showCat sick` opens the cat with the most known conditions; `-showCat apprentice` the first apprentice; `-showCat family` the living cat with the most relatives; `-showCat adopted` the first cat with an adoptive parent; any other value opens the first cat whose name starts with it.
     var debugCatToShow: Cat? {
         guard let query = UserDefaults.standard.string(forKey: "showCat"), let clan else { return nil }
         if query == "first" { return clan[clan.leader] ?? clan.living.first }
         if query == "outsider" { return nearbyOutsiders.first }
+        if query == "otherclan" { return nearbyOutsiders.first(where: \.belongsToOtherClan) }
+        if query == "fromotherclan" { return clan.living.first { $0.otherClan != nil } }
         if query == "guide" { return clan[clan.guide] }
         if query == "dead" { return clan.dead.last { $0.id != clan.guide } }
         if query == "apprentice" { return clan.living.first { $0.rank.isApprentice } }

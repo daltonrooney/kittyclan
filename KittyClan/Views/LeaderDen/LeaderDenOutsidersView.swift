@@ -27,7 +27,7 @@ struct LeaderDenOutsidersView: View {
                 } else {
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(outsiders) { cat in
-                            OutsiderCell(cat: cat, name: model.displayName(cat), isSelected: cat.id == selectedID) {
+                            OutsiderCell(cat: cat, name: model.displayName(cat), label: model.socialLabel(of: cat), isSelected: cat.id == selectedID) {
                                 select(cat.id)
                             }
                         }

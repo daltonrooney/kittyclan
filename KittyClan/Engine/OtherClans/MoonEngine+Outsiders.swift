@@ -32,6 +32,7 @@ extension MoonEngine {
         guard let index = clan.index(of: id) else { return nil }
         var cat = clan.cats.remove(at: index)
         cat.lastClanRank = cat.rank
+        if cat.otherClan != nil { cat.leftOtherClan = true }
         // Outsiders have no Clan rank, so their names lose "-kit", "-paw" and "-star" endings.
         cat.rank = .warrior
         if clan.leader == id { clan.leader = nil }
@@ -49,6 +50,7 @@ extension MoonEngine {
         cat.isLost = false
         cat.isExiled = false
         cat.isNear = true
+        if cat.otherClan != nil { cat.leftOtherClan = true }
         clan.cats.append(cat)
         var joined = [id]
         let kits = clan.outsiders.filter { $0.isAlive && !$0.isExiled && $0.moons < 12 && $0.allParents.contains(id) }.map(\.id)
@@ -140,16 +142,36 @@ extension MoonEngine {
                 cat.skills.primary?.interestOnly = false
                 cat.skills.secondary?.interestOnly = false
             }
+            if cat.belongsToOtherClan { Self.promoteOtherClanCat(&cat) }
             clan.outsiders[i] = cat
 
             guard cat.id != protected, Int.random(in: 0..<64, using: &rng) == 1 else { continue }
-            let key = cat.isExiled ? "exiled" : cat.isLost ? "lost" : cat.social.rawValue
-            let line = library.flatMap { ($0.outsiderDeaths[key] ?? $0.outsiderDeaths["default"])?.randomElement(using: &rng) }
+            let otherClanName = cat.otherClan.flatMap { clan.otherClan($0)?.name }
+            let key: String
+            if cat.isExiled { key = "exiled" }
+            else if cat.isLost { key = "lost" }
+            else if otherClanName != nil, cat.belongsToOtherClan || cat.leftOtherClan && !cat.isFormerClanCat { key = "other_clan" }
+            else { key = cat.social.rawValue }
+            var line = library.flatMap { ($0.outsiderDeaths[key] ?? $0.outsiderDeaths["default"])?.randomElement(using: &rng) }
+            if let name = otherClanName { line = line?.replacingOccurrences(of: "o_c_n", with: name) }
             clan.sendToAfterlife(cat.id, history: line, using: &rng)
             guard cat.isNear, let line else { continue }
             events.append(.story(StoryPick(template: line, cats: ["m_c": cat.id]), .death))
         }
         return events
+    }
+
+    /// Clangen's rudimentary rank changes for other Clans' cats: apprentices at 6 moons, full members at 12.
+    static func promoteOtherClanCat(_ cat: inout Cat) {
+        if cat.rank.isBaby, cat.moons >= 6 { cat.rank = .apprentice }
+        if cat.moons >= 12 {
+            switch cat.rank {
+            case .apprentice: cat.rank = .warrior
+            case .medicineApprentice: cat.rank = .medicineCat
+            case .mediatorApprentice: cat.rank = .mediator
+            default: break
+            }
+        }
     }
 
     // MARK: - New cats
@@ -224,12 +246,6 @@ extension MoonEngine {
 
         let meeting = attributes.contains("meeting")
         let dead = attributes.contains("dead")
-        var social: Cat.Origin = attributes.contains("kittypet") ? .kittypet : attributes.contains("rogue") ? .rogue
-            : attributes.contains("loner") ? .loner : pick([.kittypet, .loner], &rng)
-        if let backstory = value("backstory:")?.lowercased() {
-            if backstory.contains("kittypet") { social = .kittypet } else if backstory.contains("rogue") { social = .rogue }
-            else if backstory.contains("loner") { social = .loner }
-        }
         let blood = value("parent:")?.split(separator: ",").compactMap { resolve(String($0).trimmingCharacters(in: .whitespaces)) } ?? []
         var adoptive: [UUID] = []
         for reference in value("adoptive:")?.split(separator: ",") ?? [] {
@@ -252,12 +268,50 @@ extension MoonEngine {
             }
         }
         let litter = attributes.contains("litter")
-        if litter { rank = .kitten }
+        if litter, rank?.isBaby != true { rank = .kitten }
+
+        let backstories = Backstories.bundled
+        var group: UUID?
+        var social: NewCatSocial
+        if attributes.contains("kittypet") { social = .kittypet }
+        else if attributes.contains("rogue") { social = .rogue }
+        else if attributes.contains("loner") { social = .loner }
+        else if attributes.contains("clancat") || attributes.contains("former clancat") {
+            social = attributes.contains("former clancat") ? .formerClancat : .clancat
+            group = event.otherClan ?? clan.otherClans.randomElement(using: &rng)?.id
+        } else if let parent = blood.first.flatMap({ clan[$0] }) {
+            let isOutsider = clan.outsiders.contains { $0.id == parent.id }
+            social = !isOutsider || parent.belongsToOtherClan ? .clancat : NewCatSocial(rawValue: parent.social.rawValue) ?? .loner
+            if isOutsider, parent.belongsToOtherClan { group = parent.otherClan }
+        } else {
+            social = pick([.kittypet, .loner, .formerClancat], &rng)
+        }
+
+        var backstory: String
+        if rank?.isBaby == true {
+            backstory = backstories.random(from: "abandoned_backstories", using: &rng) ?? "abandoned1"
+        } else if rank == .medicineCat {
+            backstory = social == .clancat ? pick(["medicine_cat", "disgraced1"], &rng) : pick(["wandering_healer1", "wandering_healer2"], &rng)
+        } else {
+            let kind = social == .clancat || social == .formerClancat ? "former_clancat" : social.rawValue
+            backstory = backstories.random(from: kind + "_backstories", using: &rng) ?? "outsider1"
+        }
+        let listed = value("backstory:").flatMap { backstories.expand($0.split(separator: ",").map(String.init)) }?.sorted() ?? []
+        if let story = listed.randomElement(using: &rng) {
+            backstory = story
+            switch backstories.social(of: story) {
+            case .clancat?: if social != .formerClancat { social = .clancat }
+            case let other?: social = other
+            case nil: break
+            }
+        }
+        if meeting, let moons, moons <= 6, listed.isEmpty { backstory = "outsider1" }
 
         let sex: Cat.Sex? = attributes.contains("male") ? .male : (attributes.contains("female") || attributes.contains("can_birth")) ? .female : nil
         if attributes.contains("exists"),
            let existing = clan.outsiders.first(where: { other in
-               other.isAlive && other.isNear && !other.isExiled && other.social == social
+               other.isAlive && other.isNear && !other.isExiled && !other.belongsToOtherClan && social.origin == other.social
+                   && (listed.isEmpty || other.backstory.map(listed.contains) == true)
                    && (sex == nil || other.sex == sex) && (moons.map { CatAge(moons: $0) == other.age } ?? true)
                    && !earlier.flatMap({ $0 }).contains(other.id)
            }) {
@@ -271,19 +325,30 @@ extension MoonEngine {
             return (welcomeBack(existing.id, in: &clan, counts: &counts, using: &rng), true)
         }
 
+        if group == nil, social == .formerClancat || backstories.isFromOtherClan(backstory) {
+            group = clan.otherClans.randomElement(using: &rng)?.id
+        }
         let count = litter ? weighted([(2, 5), (3, 4), (4, 1), (5, 1)], &rng) : 1
-        let litterMoons = litter ? Int.random(in: 1...5, using: &rng) : nil
+        let litterMoons = litter ? (rank == .newborn ? 0 : Int.random(in: 1...5, using: &rng)) : nil
         var ids: [UUID] = []
         let joins = !meeting && !dead
         for _ in 0..<count {
             let finalRank = rank ?? (moons.map { CatAge(moons: $0) }.map(Self.rankForAge) ?? .warrior)
-            var cat = factory.make(rank: finalRank, moons: litterMoons ?? moons, origin: social, sex: sex, using: &rng)
+            let origin: Cat.Origin = switch social {
+            case .formerClancat: pick([.kittypet, .loner, .rogue], &rng)
+            case .clancat: group == nil ? .loner : .clanborn
+            default: social.origin ?? .loner
+            }
+            var cat = factory.make(rank: finalRank, moons: litterMoons ?? moons, origin: origin, sex: sex, using: &rng)
+            cat.backstory = backstory
+            cat.otherClan = group
+            cat.leftOtherClan = group != nil && (joins || social != .clancat)
             cat.parents = blood
             cat.adoptiveParents = adoptive
             let baby = cat.moons < 12
             let keepsOldName = attributes.contains("old_name") || (!attributes.contains("new_name") && Bool.random(using: &rng))
-            if !(baby && joins), !joins || keepsOldName {
-                cat.name = factory.names.outsiderName(for: social, using: &rng)
+            if group == nil, !(baby && joins), !joins || keepsOldName {
+                cat.name = factory.names.outsiderName(for: origin, using: &rng)
             }
             if !(baby && joins) { factory.maybeCollar(&cat, using: &rng) }
             if dead {
@@ -311,7 +376,7 @@ extension MoonEngine {
         return (ids, joins)
     }
 
-    private static func rankForAge(_ age: CatAge) -> Rank {
+    static func rankForAge(_ age: CatAge) -> Rank {
         switch age {
         case .newborn: .newborn
         case .kitten: .kitten
@@ -349,8 +414,17 @@ extension MoonEngine {
             case "drive":
                 clan.outsiders[i].isNear = false
             default:
+                let wasExiled = target.isExiled
                 var counts: [UUID: Int] = [:]
                 joined = welcomeBack(outsider, in: &clan, counts: &counts, using: &rng)
+                for id in joined where !wasExiled || id != outsider {
+                    guard let j = clan.index(of: id), let story = clan.cats[j].backstory else { continue }
+                    if story.contains("guided") {
+                        clan.cats[j].backstory = "outsider1"
+                    } else if Backstories.bundled.contains(story, in: "healer_backstories"), !clan.cats[j].rank.isBaby {
+                        clan.cats[j].rank = .medicineCat
+                    }
+                }
             }
         }
         var text = outcome.text
@@ -375,7 +449,7 @@ extension MoonEngine {
 
     /// Outsiders the leader's den can act on: living, still nearby, and known to the Clan.
     static func denOutsiders(in clan: Clan) -> [Cat] {
-        clan.outsiders.filter { $0.isAlive && $0.isNear }
+        clan.outsiders.filter { $0.isAlive && $0.isNear && !$0.belongsToOtherClan }
     }
 
     /// The leader's den choices for an outsider: hunt down, drive off, and invite in (search for, if lost).

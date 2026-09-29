@@ -38,6 +38,34 @@ struct AfterlifeText: Sendable {
         return template.resolve(text, cats: ["m_c": cat], clan: clan)
     }
 
+    /// Clangen's short backstory label, e.g. "formerly a loner".
+    func backstoryLabel(of cat: Cat) -> String? {
+        guard let key = cat.backstory, let category = Backstories.bundled.category(of: key) else { return nil }
+        return backstories[category]
+    }
+
+    /// Clangen's `get_backstory_text`: another Clan's cats and outsiders who never lived in the Clan
+    /// are described by who they are now; everyone else by their backstory, then whether they're lost or exiled.
+    func profileBackstory(of cat: Cat, in clan: Clan) -> String {
+        let isOutsider = clan.outsiders.contains { $0.id == cat.id }
+        var text: String
+        if isOutsider, cat.belongsToOtherClan, let name = clan.otherClan(cat.otherClan)?.name {
+            text = (backstories["other_clan_cat"] ?? "This cat is part of %{clan}.").replacingOccurrences(of: "%{clan}", with: name)
+            if cat.isDead { text = text.replacingOccurrences(of: "is part", with: "was part") }
+        } else if isOutsider, !cat.isLost, !cat.isExiled {
+            let key = cat.isDead ? "cats_outside_the_clan_dead" : "cats_outside_the_clan"
+            text = (backstories[key] ?? "This cat is a %{status}.").replacingOccurrences(of: "%{status}", with: cat.social.rawValue)
+        } else if let key = cat.backstory, let story = backstories[key] {
+            text = story
+        } else {
+            text = (backstories["unknown"] ?? "%{name}'s past history is unknown.").replacingOccurrences(of: "%{name}", with: "m_c")
+        }
+        text = text.replacingOccurrences(of: "This cat", with: "m_c")
+        if isOutsider, cat.isLost { text += " " + (backstories["currently_lost"] ?? "").replacingOccurrences(of: "%{name}", with: "m_c") }
+        if isOutsider, cat.isExiled { text += " " + (backstories["currently_exiled"] ?? "").replacingOccurrences(of: "%{name}", with: "m_c") }
+        return template.resolve(text.trimmingCharacters(in: .whitespaces), cats: ["m_c": cat], clan: clan)
+    }
+
     /// Clangen's afterlife acceptance text, shown at the end of a dead cat's history.
     func acceptance(of cat: Cat, in clan: Clan) -> String? {
         guard let key = cat.afterlifeAcceptance, let text = acceptance[key] else { return nil }

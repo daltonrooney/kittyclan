@@ -22,6 +22,7 @@ struct MoonEngine: Sendable {
 
     func advance(_ clan: inout Clan, using rng: inout some RandomNumberGenerator) {
         var events: [MoonEvent] = []
+        Self.fillMissingBackstories(in: &clan, using: &rng)
         clan.age += 1
         let patrolled = !clan.patrolledThisMoon.isEmpty
         clan.patrolledThisMoon = []
@@ -344,7 +345,7 @@ struct MoonEngine: Sendable {
 
     /// Clangen's `check_parents`; only the cat who rolls needs to be working.
     private func canHaveKits(_ cat: Cat?, in clan: Clan, working: Bool = true) -> Bool {
-        guard let cat, cat.isAlive, !working || !cat.isNotWorking, cat.birthCooldown == 0, cat.moons >= 15, cat.isMateAge else { return false }
+        guard let cat, clan.isAlive(cat.id), !working || !cat.isNotWorking, cat.birthCooldown == 0, cat.moons >= 15, cat.isMateAge else { return false }
         return Self.canHaveKits.contains(cat.rank) && clan.pregnancies[cat.id] == nil
     }
 
@@ -503,7 +504,11 @@ struct MoonEngine: Sendable {
         if kind == "litter" {
             let count = weighted([(2, 5), (3, 4), (4, 1), (5, 1)], &rng)
             let moons = Int.random(in: 1...5, using: &rng)
-            let kits = (0..<count).map { _ in factory.make(rank: .kitten, moons: moons, origin: .loner, using: &rng) }
+            let kits = (0..<count).map { _ in
+                var kit = factory.make(rank: .kitten, moons: moons, origin: .loner, using: &rng)
+                kit.backstory = Backstories.bundled.random(from: "abandoned_backstories", using: &rng)
+                return kit
+            }
             clan.cats += kits
             for kit in kits { rollCongenital(for: kit.id, odds: 8, in: &clan, using: &rng) }
             return [.litterFound(kits.map(\.id), foundBy: id)]

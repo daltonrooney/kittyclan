@@ -19,6 +19,10 @@ struct PatrolSlot: Sendable {
     let experienceLevels: [String]?
     let conditions: [String]?
     let outsiderStatuses: [String]
+    /// Clangen's "clancat" status: a cat of the neighbouring Clan the patrol meets.
+    let wantsOtherClanCat: Bool
+    /// Clangen's `past_status: ["clancat"]`: a cat who once lived in a Clan (or never did, when false).
+    let wasClanCat: Bool?
     /// Set when the slot can be filled by creating a new cat.
     let create: Creation?
 
@@ -28,6 +32,12 @@ struct PatrolSlot: Sendable {
         let genders: [String]
         let status: String?
         let skills: [String]
+        /// Backstory keys to choose from, categories expanded.
+        let backstories: [String]
+        /// Involved cats who become the new cat's mates, blood parents and adoptive parents.
+        let mates: [String]
+        let bloodParents: [String]
+        let adoptiveParents: [String]
     }
 
     /// Clangen's stat-cat bonus: 5 per tier of the matching skill, or 10 for a matching trait.
@@ -59,17 +69,33 @@ struct PatrolSlot: Sendable {
 
         let statuses = rest["status"] as? [String] ?? []
         outsiderStatuses = statuses.filter(Self.outsiderRanks.contains)
-        if statuses.contains("clancat") || statuses.contains("lost") || statuses.contains("guide") { return nil }
+        wantsOtherClanCat = statuses.contains("clancat")
+        if statuses.contains("lost") || statuses.contains("guide") { return nil }
         if !outsiderStatuses.isEmpty { rest["status"] = nil }
+        if let past = rest["past_status"] as? [String], past.allSatisfy({ $0 == "clancat" || $0 == "-clancat" }) {
+            rest["past_status"] = nil
+            wasClanCat = !past.contains("-clancat")
+        } else {
+            wasClanCat = nil
+        }
 
         if let spec = rest.removeValue(forKey: "can_create_new_cat") as? [String: Any] {
-            guard Set(spec.keys).isSubset(of: ["become_litter"]) else { return nil }
+            guard Set(spec.keys).isSubset(of: ["become_litter", "assign_mate", "assign_blood_parent", "assign_adoptive_parent"]) else { return nil }
+            var backstories: [String] = []
+            if let list = rest["backstory"] as? [String], !list.contains(where: { $0.hasPrefix("-") }) {
+                guard let expanded = Backstories.bundled.expand(list) else { return nil }
+                backstories = expanded.sorted()
+            }
             create = Creation(
                 litter: spec["become_litter"] as? Bool ?? false,
                 ages: rest["age"] as? [String] ?? [],
                 genders: rest["gender"] as? [String] ?? [],
-                status: outsiderStatuses.randomElement() ?? statuses.first,
-                skills: (stat?["skill"] as? [String] ?? []).filter { !$0.hasPrefix("-") }
+                status: wantsOtherClanCat ? "clancat" : outsiderStatuses.randomElement() ?? statuses.first,
+                skills: (stat?["skill"] as? [String] ?? []).filter { !$0.hasPrefix("-") },
+                backstories: backstories,
+                mates: spec["assign_mate"] as? [String] ?? [],
+                bloodParents: spec["assign_blood_parent"] as? [String] ?? [],
+                adoptiveParents: spec["assign_adoptive_parent"] as? [String] ?? []
             )
         } else {
             create = nil
@@ -78,10 +104,15 @@ struct PatrolSlot: Sendable {
         self.constraint = constraint
     }
 
-    func matches(_ cat: Cat, isOutsider: Bool) -> Bool {
+    /// - Parameter otherClan: the neighbouring Clan the patrol may meet.
+    func matches(_ cat: Cat, isOutsider: Bool, otherClan: UUID? = nil) -> Bool {
         if !outsiderStatuses.isEmpty {
-            guard isOutsider, outsiderStatuses.contains(cat.origin.rawValue) else { return false }
+            guard isOutsider, !cat.belongsToOtherClan, outsiderStatuses.contains(cat.origin.rawValue) else { return false }
         }
+        if wantsOtherClanCat {
+            guard isOutsider, cat.belongsToOtherClan, otherClan == nil || cat.otherClan == otherClan else { return false }
+        }
+        if let wasClanCat, (cat.isFormerClanCat || cat.leftOtherClan) != wasClanCat { return false }
         if let working, working == cat.isNotWorking { return false }
         if let levels = experienceLevels, !levels.contains(Self.experienceLevel(cat.experience)) { return false }
         if let conditions {
