@@ -19,15 +19,19 @@ struct BasicNarrator: Narrator {
         case .newMentor(let apprentice, let mentor):
             "\(name(mentor, in: clan)) is now mentoring \(name(apprentice, in: clan))."
         case .graduated(let cat, _):
-            clan[cat]?.rank == .medicineCat
-                ? "\(name(cat, in: clan)) has been welcomed as a full medicine cat."
-                : "\(clan.displayName) welcomes \(name(cat, in: clan)) as a new warrior."
+            switch clan[cat]?.rank {
+            case .medicineCat: "\(name(cat, in: clan)) has been welcomed as a full medicine cat."
+            case .mediator: "\(clan.displayName) welcomes \(name(cat, in: clan)) as a new mediator."
+            default: "\(clan.displayName) welcomes \(name(cat, in: clan)) as a new warrior."
+            }
         case .retired(let cat):
             "\(name(cat, in: clan)) has retired to the elders' den."
         case .deputyAppointed(let cat):
             "\(name(cat, in: clan)) has been chosen as the new deputy."
         case .becameLeader(let cat, _):
             "\(name(cat, in: clan)) has become the new leader of the Clan."
+        case .becameMediator(let cat, _):
+            "\(name(cat, in: clan)) has chosen to become a mediator."
         case .leaderLostLife(let cat, let lives):
             lives == 1 ? "\(name(cat, in: clan)) has 1 life left." : "\(name(cat, in: clan)) has \(lives) lives left."
         case .died(let cat, let cause):

@@ -102,6 +102,7 @@ struct NameGenerator: Sendable {
         case .kitten: "kitten"
         case .apprentice: "apprentice"
         case .medicineApprentice: "medicine cat apprentice"
+        case .mediatorApprentice: "mediator apprentice"
         case .leader: "leader"
         default: nil
         }

@@ -89,7 +89,7 @@ extension MoonEngine {
             }
         }
         if rank.isApprentice || rank.isBaby {
-            if cat.moons >= 15 { rank = rank == .medicineApprentice ? .medicineCat : .warrior }
+            if cat.moons >= 15 { rank = [.medicineApprentice: .medicineCat, .mediatorApprentice: .mediator][rank] ?? .warrior }
             else if !rank.isApprentice, cat.moons >= 6 { rank = .apprentice }
         }
         return rank

@@ -57,8 +57,8 @@ struct ThoughtCatFilter: Sendable {
             mustBeCongenital = false
         }
 
-        if let past = rest.removeValue(forKey: "past_status") as? [String] {
-            guard past.allSatisfy({ $0 == "clancat" || $0 == "-clancat" }) else { return nil }
+        if let past = rest["past_status"] as? [String], past.allSatisfy({ $0 == "clancat" || $0 == "-clancat" }) {
+            rest["past_status"] = nil
             formerClanCat = !past.contains("-clancat")
         } else {
             formerClanCat = nil

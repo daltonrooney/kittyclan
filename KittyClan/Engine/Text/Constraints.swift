@@ -14,6 +14,10 @@ struct Constraint: Sendable {
     var hasMentor: Bool?
     var hasCurrentApprentice: Bool?
     var hasFormerApprentice: Bool?
+    /// Clangen's `past_status`: ranks the cat held before its current one.
+    var pastStatuses: [String]?
+    /// Clangen's `current_exp`: experience levels such as "prepared".
+    var experienceLevels: [String]?
     /// Legacy short-event `relationship_status` tokens, checked by the caller against the other cat.
     var relationshipStatus: [String] = []
 
@@ -43,6 +47,8 @@ struct Constraint: Sendable {
             case "relationship_status":
                 relationshipStatus = value as? [String] ?? []
                 guard relationshipStatus.allSatisfy(RelationshipRule.isSupported) else { return nil }
+            case "past_status": pastStatuses = value as? [String]
+            case "current_exp": experienceLevels = value as? [String]
             case "dies":
                 continue
             default:
@@ -63,6 +69,18 @@ struct Constraint: Sendable {
             && hasMentor.map { $0 == (cat.mentor != nil) } ?? true
             && hasCurrentApprentice.map { $0 == !cat.apprentices.isEmpty } ?? true
             && hasFormerApprentice.map { $0 == !cat.formerApprentices.isEmpty } ?? true
+            && Self.listAllows(experienceLevels, PatrolSlot.experienceLevel(cat.experience))
+            && pastStatusHolds(for: cat)
+    }
+
+    /// Clangen's `_check_cat_status_history`: any rank held before other than the current one.
+    private func pastStatusHolds(for cat: Cat) -> Bool {
+        guard let pastStatuses, !pastStatuses.isEmpty, !pastStatuses.contains("any") else { return true }
+        let past = Set(cat.pastRanks.filter { $0 != cat.rank }.map(\.rawValue))
+        if pastStatuses.contains(where: { $0.hasPrefix("-") }) {
+            return past.isDisjoint(with: pastStatuses.map { String($0.drop { $0 == "-" }) })
+        }
+        return !past.isDisjoint(with: pastStatuses)
     }
 
     /// Clangen's `_check_cat_stat`.

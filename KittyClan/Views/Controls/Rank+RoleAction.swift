@@ -10,6 +10,8 @@ extension Rank {
         case .warrior: "Make warrior"
         case .elder: "Retire to the elders' den"
         case .medicineApprentice: "Switch to medicine cat apprentice"
+        case .mediator: "Make mediator"
+        case .mediatorApprentice: "Switch to mediator apprentice"
         case .apprentice: "Switch to warrior apprentice"
         case .newborn, .kitten: label
         }
@@ -20,6 +22,7 @@ extension Rank {
         case .leader: "star.fill"
         case .deputy: "shield.fill"
         case .medicineCat, .medicineApprentice: "cross.case.fill"
+        case .mediator, .mediatorApprentice: "bubble.left.and.bubble.right.fill"
         case .warrior, .apprentice: "figure.walk"
         case .elder: "moon.zzz.fill"
         case .newborn, .kitten: "pawprint.fill"

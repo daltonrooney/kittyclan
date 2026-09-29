@@ -5,20 +5,27 @@ enum Rank: String, Codable, CaseIterable, Sendable {
     case kitten
     case apprentice
     case medicineApprentice = "medicine cat apprentice"
+    case mediatorApprentice = "mediator apprentice"
     case warrior
     case medicineCat = "medicine cat"
+    case mediator
     case deputy
     case leader
     case elder
 
     var label: String { rawValue.capitalized }
 
-    var isApprentice: Bool { self == .apprentice || self == .medicineApprentice }
+    var isApprentice: Bool { [.apprentice, .medicineApprentice, .mediatorApprentice].contains(self) }
+    /// Clangen's `is_any_mediator_rank`.
+    var isMediator: Bool { self == .mediator || self == .mediatorApprentice }
+    /// Clangen's `is_any_adult_warrior_like_rank`.
+    var isWarriorLike: Bool { [.warrior, .deputy, .leader].contains(self) }
     var isBaby: Bool { self == .newborn || self == .kitten }
 
     /// Clangen's display order, top to bottom.
     static let displayOrder: [Rank] = [
-        .leader, .deputy, .medicineCat, .medicineApprentice, .warrior, .apprentice, .elder, .kitten, .newborn,
+        .leader, .deputy, .medicineCat, .medicineApprentice, .mediator, .mediatorApprentice,
+        .warrior, .apprentice, .elder, .kitten, .newborn,
     ]
 }
 
@@ -78,6 +85,8 @@ struct Cat: Identifiable, Codable, Hashable, Sendable {
     var isNear = true
     /// The rank a former Clan cat held before leaving, restored if they return.
     var lastClanRank: Rank?
+    /// Ranks the cat has held before, oldest first (Clangen's group history).
+    var pastRanks: [Rank] = []
 
     var age: CatAge { CatAge(moons: moons) }
     var isAlive: Bool { !isDead }
@@ -138,5 +147,6 @@ extension Cat {
         isExiled = try c.decodeIfPresent(Bool.self, forKey: .isExiled) ?? false
         isNear = try c.decodeIfPresent(Bool.self, forKey: .isNear) ?? true
         lastClanRank = try c.decodeIfPresent(Rank.self, forKey: .lastClanRank)
+        pastRanks = try c.decodeIfPresent([Rank].self, forKey: .pastRanks) ?? []
     }
 }

@@ -19,9 +19,10 @@ final class ControlsTests: XCTestCase {
     }
 
     func testRoleScreenMatrix() {
-        XCTAssertEqual(Rank.warrior.manualTargets(leaderVacant: false, deputyVacant: false), [.medicineCat, .elder])
-        XCTAssertEqual(Rank.warrior.manualTargets(leaderVacant: true, deputyVacant: true), [.leader, .deputy, .medicineCat, .elder])
-        XCTAssertEqual(Rank.medicineCat.manualTargets(leaderVacant: true, deputyVacant: true), [.warrior, .elder])
+        XCTAssertEqual(Rank.warrior.manualTargets(leaderVacant: false, deputyVacant: false), [.medicineCat, .mediator, .elder])
+        XCTAssertEqual(Rank.warrior.manualTargets(leaderVacant: true, deputyVacant: true), [.leader, .deputy, .medicineCat, .mediator, .elder])
+        XCTAssertEqual(Rank.medicineCat.manualTargets(leaderVacant: true, deputyVacant: true), [.warrior, .mediator, .elder])
+        XCTAssertEqual(Rank.apprentice.manualTargets(leaderVacant: true, deputyVacant: true), [.medicineApprentice, .mediatorApprentice])
         XCTAssertTrue(Rank.kitten.manualTargets(leaderVacant: true, deputyVacant: true).isEmpty)
         XCTAssertFalse(Rank.apprentice.manualTargets(leaderVacant: true, deputyVacant: true).contains(.warrior))
     }

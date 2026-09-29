@@ -3,16 +3,18 @@ import Foundation
 /// The choices Clangen leaves to the player: roles, mentors, mates and names. None of them
 /// are written to the moon log, as in Clangen.
 extension Rank {
-    /// Clangen's RoleScreen buttons for a cat of this rank, without mediators.
+    /// Clangen's RoleScreen buttons for a cat of this rank.
     func manualTargets(leaderVacant: Bool, deputyVacant: Bool) -> [Rank] {
         var targets: [Rank]
         switch self {
-        case .apprentice: targets = [.medicineApprentice]
-        case .medicineApprentice: targets = [.apprentice]
-        case .warrior: targets = [.leader, .deputy, .medicineCat, .elder]
+        case .apprentice: targets = [.medicineApprentice, .mediatorApprentice]
+        case .medicineApprentice: targets = [.apprentice, .mediatorApprentice]
+        case .mediatorApprentice: targets = [.apprentice, .medicineApprentice]
+        case .warrior: targets = [.leader, .deputy, .medicineCat, .mediator, .elder]
         case .deputy: targets = [.leader, .warrior, .elder]
-        case .medicineCat: targets = [.warrior, .elder]
-        case .elder: targets = [.leader, .deputy, .warrior, .medicineCat]
+        case .medicineCat: targets = [.warrior, .mediator, .elder]
+        case .mediator: targets = [.leader, .deputy, .warrior, .medicineCat, .elder]
+        case .elder: targets = [.leader, .deputy, .warrior, .medicineCat, .mediator]
         case .leader: targets = [.warrior, .elder]
         case .newborn, .kitten: targets = []
         }

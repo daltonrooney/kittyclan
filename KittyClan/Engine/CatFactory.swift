@@ -21,7 +21,7 @@ struct CatFactory: Sendable {
         switch rank {
         case .newborn: 0
         case .kitten: Int.random(in: 1...5, using: &rng)
-        case .apprentice, .medicineApprentice: Int.random(in: 6...11, using: &rng)
+        case .apprentice, .medicineApprentice, .mediatorApprentice: Int.random(in: 6...11, using: &rng)
         case .elder: Int.random(in: 120...300, using: &rng)
         default:
             switch pick([CatAge.youngAdult, .adult, .adult, .seniorAdult], &rng) {

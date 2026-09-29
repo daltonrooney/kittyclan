@@ -2,8 +2,10 @@ import Foundation
 
 /// Clangen's afterlife: the Clan's guide, the dead growing older, and fading.
 extension MoonEngine {
-    /// Clangen's guide ranks, without mediators.
-    private static let guideRanks: [Rank] = [.apprentice, .medicineApprentice, .warrior, .medicineCat, .leader, .deputy, .elder]
+    /// Clangen's guide ranks.
+    private static let guideRanks: [Rank] = [
+        .apprentice, .mediatorApprentice, .medicineApprentice, .warrior, .medicineCat, .leader, .mediator, .deputy, .elder,
+    ]
 
     /// Clangen's `create_clan` guide: a StarClan cat dead for 20–200 moons.
     func makeGuide(for clan: inout Clan, using rng: inout some RandomNumberGenerator) {

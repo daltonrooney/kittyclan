@@ -10,7 +10,8 @@ struct ClangenNarrator: Narrator {
         switch event {
         case .story(let pick, _):
             return resolve(pick, in: clan)
-        case .apprenticed(let id, _, let oldName), .graduated(let id, let oldName), .becameLeader(let id, let oldName):
+        case .apprenticed(let id, _, let oldName), .graduated(let id, let oldName), .becameLeader(let id, let oldName),
+             .becameMediator(let id, let oldName):
             return ceremony(for: id, oldName: oldName, in: clan, using: &rng) ?? fallback.text(for: event, in: clan, using: &rng)
         case .retired(let id), .deputyAppointed(let id):
             let oldName = clan[id].map { template.names.display($0.name, rank: $0.rank) } ?? ""

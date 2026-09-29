@@ -13,6 +13,7 @@ enum MoonEvent: Sendable {
     case retired(UUID)
     case deputyAppointed(UUID)
     case becameLeader(UUID, oldName: String)
+    case becameMediator(UUID, oldName: String)
     case leaderLostLife(UUID, livesLeft: Int)
     case died(UUID, DeathCause)
     case becameMates(UUID, UUID)
@@ -29,7 +30,7 @@ enum MoonEvent: Sendable {
         switch self {
         case .founded, .noDeputy, .lowPrey: .info
         case .story(_, let kind): kind
-        case .apprenticed, .newMentor, .graduated, .retired, .deputyAppointed, .becameLeader: .ceremony
+        case .apprenticed, .newMentor, .graduated, .retired, .deputyAppointed, .becameLeader, .becameMediator: .ceremony
         case .leaderLostLife, .died: .death
         case .becameMates, .expecting: .relationship
         case .born: .birth
@@ -43,7 +44,7 @@ enum MoonEvent: Sendable {
         case .apprenticed(let cat, let mentor, _): [cat] + [mentor].compactMap { $0 }
         case .story(let pick, _): pick.cats.sorted { $0.key < $1.key }.map(\.value)
         case .newMentor(let a, let m): [a, m]
-        case .graduated(let c, _), .retired(let c), .deputyAppointed(let c), .becameLeader(let c, _): [c]
+        case .graduated(let c, _), .retired(let c), .deputyAppointed(let c), .becameLeader(let c, _), .becameMediator(let c, _): [c]
         case .joined(let c, let by): [c, by]
         case .leaderLostLife(let c, _), .died(let c, _): [c]
         case .becameMates(let a, let b): [a, b]

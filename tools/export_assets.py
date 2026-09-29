@@ -214,8 +214,7 @@ def export_text():
     files[""].append(lang / "cat" / "skills.en.json")
     thoughts = lang / "thoughts"
     for path in sorted(thoughts.rglob("*.json")):
-        if not path.stem.startswith("mediator"):
-            files.setdefault(str(path.parent.relative_to(lang)), []).append(path)
+        files.setdefault(str(path.parent.relative_to(lang)), []).append(path)
     files["afterlife"] = [
         events / "lead_ceremony_sc.json", events / "lead_ceremony_df.json",
         lang / "cat" / "afterlife.en.json", lang / "cat" / "backstories.en.json",

@@ -8,8 +8,8 @@ extension MoonEngine {
     static func preyRequirement(_ rank: Rank) -> Double {
         switch rank {
         case .leader, .deputy, .warrior: 3
-        case .medicineCat: 2
-        case .medicineApprentice, .apprentice, .elder: 1.5
+        case .medicineCat, .mediator: 2
+        case .medicineApprentice, .apprentice, .mediatorApprentice, .elder: 1.5
         case .kitten: 0.5
         case .newborn: 0.25
         }
@@ -99,6 +99,8 @@ extension MoonEngine {
             case .apprentice: [1, 2, 2, 3]
             case .medicineCat: [0, 1, 1, 2]
             case .medicineApprentice: [0, 1]
+            case .mediator: [0, 1, 2, 2]
+            case .mediatorApprentice: [0, 1, 1]
             case .elder: [0, 1, 1]
             case .kitten: [0, 0, 1]
             case .newborn: [0]
@@ -122,7 +124,10 @@ extension MoonEngine {
     func feed(_ ids: [UUID], in clan: inout Clan, manual: Bool) {
         updateNutrition(in: &clan)
         let (queens, fedKits) = Self.queens(in: clan)
-        let order: [Rank] = [.newborn, .kitten, .elder, .medicineCat, .medicineApprentice, .apprentice, .warrior, .deputy, .leader]
+        let order: [Rank] = [
+            .newborn, .kitten, .elder, .medicineCat, .medicineApprentice, .apprentice, .mediatorApprentice,
+            .warrior, .mediator, .deputy, .leader,
+        ]
         let chosen = Set(ids)
         let cats = clan.living.filter { chosen.contains($0.id) && !fedKits.contains($0.id) }
         let queenGroup = cats.filter { queens.contains($0.id) }.sorted { $0.moons < $1.moons }

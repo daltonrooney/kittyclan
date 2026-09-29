@@ -99,6 +99,10 @@ struct RelationshipEngine: Sendable {
 
     /// Clangen's personality compatibility: same trait, or facets within 4 of each other.
     func compatibility(_ a: Cat, _ b: Cat) -> Compatibility {
+        Self.compatibility(a, b)
+    }
+
+    static func compatibility(_ a: Cat, _ b: Cat) -> Compatibility {
         if a.personality.trait == b.personality.trait { return .positive }
         let pa = a.personality, pb = b.personality
         let score = [
@@ -224,7 +228,7 @@ struct RelationshipEngine: Sendable {
     }
 
     private func underCap(_ id: UUID, _ clan: Clan, _ counts: [UUID: Int]) -> Bool {
-        let special: Set<Rank> = [.leader, .deputy, .medicineCat]
+        let special: Set<Rank> = [.leader, .deputy, .medicineCat, .mediator]
         let cap = clan[id].map { special.contains($0.rank) } == true ? Self.maxInteractionsSpecial : Self.maxInteractions
         return counts[id, default: 0] < cap
     }

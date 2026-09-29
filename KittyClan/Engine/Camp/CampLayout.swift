@@ -81,7 +81,7 @@ struct CampLibrary: Sendable {
 
         for cat in cats where cat.isAlive && cat.rank != .newborn {
             let weights: [Int] = switch cat.rank {
-            case .apprentice: [1, 50, 1, 1, 100, 100, 1]
+            case .apprentice, .mediatorApprentice: [1, 50, 1, 1, 100, 100, 1]
             case .deputy: [1, 50, 1, 1, 1, 50, 1]
             case .elder: [1, 1, 2000, 1, 1, 1, 1]
             case .kitten: [60, 8, 1, 1, 1, 1, 1]

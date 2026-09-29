@@ -115,6 +115,7 @@ extension MoonEngine {
         let working = clan.living.filter { !$0.isNotWorking }
         if let deputy = working.first(where: { $0.id == clan.deputy }) { return deputy }
         if let healer = working.first(where: { [.medicineCat, .medicineApprentice].contains($0.rank) }) { return healer }
+        if let mediator = working.first(where: { $0.rank.isMediator }) { return mediator }
         return working.filter { !$0.rank.isBaby }.max { $0.experience < $1.experience }
     }
 

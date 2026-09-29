@@ -1,5 +1,15 @@
 import Foundation
 
+/// Two cats in no particular order.
+struct CatPair: Hashable, Codable, Sendable {
+    let first: UUID
+    let second: UUID
+
+    init(_ a: UUID, _ b: UUID) {
+        (first, second) = a.uuidString < b.uuidString ? (a, b) : (b, a)
+    }
+}
+
 struct Pregnancy: Codable, Hashable, Sendable {
     var otherParent: UUID
     var moons = 0
@@ -55,6 +65,12 @@ struct Clan: Codable, Sendable {
     var outsiders: [Cat] = []
     /// Cats who have already been on a patrol this moon.
     var patrolledThisMoon: Set<UUID> = []
+    /// Mediators who have already mediated this moon.
+    var mediatedThisMoon: Set<UUID> = []
+    /// Pairs of cats already mediated this moon.
+    var mediatedPairs: Set<CatPair> = []
+    /// Clangen's `become_mediator` setting: warriors and elders may choose to become mediators.
+    var becomeMediator = false
     /// How each cat feels about each other cat: `relationships[from][to]`.
     var relationships: [UUID: [UUID: Relationship]] = [:]
     var history: [MoonLog] = []
@@ -166,6 +182,9 @@ extension Clan {
         pregnancies = try c.decodeIfPresent([UUID: Pregnancy].self, forKey: .pregnancies) ?? [:]
         outsiders = try c.decodeIfPresent([Cat].self, forKey: .outsiders) ?? []
         patrolledThisMoon = try c.decodeIfPresent(Set<UUID>.self, forKey: .patrolledThisMoon) ?? []
+        mediatedThisMoon = try c.decodeIfPresent(Set<UUID>.self, forKey: .mediatedThisMoon) ?? []
+        mediatedPairs = try c.decodeIfPresent(Set<CatPair>.self, forKey: .mediatedPairs) ?? []
+        becomeMediator = try c.decodeIfPresent(Bool.self, forKey: .becomeMediator) ?? false
         relationships = try c.decodeIfPresent([UUID: [UUID: Relationship]].self, forKey: .relationships) ?? [:]
         history = try c.decodeIfPresent([MoonLog].self, forKey: .history) ?? []
         preyAndHerbs = try c.decodeIfPresent(Bool.self, forKey: .preyAndHerbs) ?? false

@@ -11,7 +11,7 @@ struct MoonEngine: Sendable {
     var ceremonies: LeaderCeremonyLibrary?
     var thoughts: ThoughtLibrary?
 
-    private static let canHaveKits: Set<Rank> = [.leader, .deputy, .medicineCat, .warrior, .elder]
+    private static let canHaveKits: Set<Rank> = [.leader, .deputy, .medicineCat, .mediator, .warrior, .elder]
     private static let litterWeights: [CatAge: [Int]] = [
         .youngAdult: [8, 10, 17, 12, 6, 2],
         .adult: [9, 13, 15, 8, 2, 0],
@@ -24,6 +24,8 @@ struct MoonEngine: Sendable {
         clan.age += 1
         let patrolled = !clan.patrolledThisMoon.isEmpty
         clan.patrolledThisMoon = []
+        clan.mediatedThisMoon = []
+        clan.mediatedPairs = []
         for id in clan.pregnancies.keys { clan.pregnancies[id]?.moons += 1 }
         afterlifeMoon(in: &clan, using: &rng)
         for i in clan.cats.indices { clan.cats[i].nextThought = nil }
@@ -177,6 +179,11 @@ struct MoonEngine: Sendable {
             return [.becameLeader(id, oldName: oldName)]
         }
 
+        if clan.becomeMediator, cat.rank == .warrior && oneIn(5000, &rng) || cat.rank == .elder && oneIn(400, &rng) {
+            setRank(.mediator, for: id, in: &clan, using: &rng)
+            return [.becameMediator(id, oldName: oldName)]
+        }
+
         if [.warrior, .deputy].contains(cat.rank), cat.apprentices.isEmpty, cat.moons > 114 {
             let odds = 100 - 0.7 * Double(cat.moons)
             if cat.moons > 140 || odds <= 1 || Double.random(in: 0..<1, using: &rng) < 1 / odds {
@@ -187,7 +194,13 @@ struct MoonEngine: Sendable {
         }
 
         if cat.rank == .kitten, cat.moons == CatAge.adolescent.moons.lowerBound {
-            let rank: Rank = becomesMedicineApprentice(cat, in: clan, using: &rng) ? .medicineApprentice : .apprentice
+            let rank: Rank = if becomesMedicineApprentice(cat, in: clan, using: &rng) {
+                .medicineApprentice
+            } else if becomesMediatorApprentice(cat, in: clan, using: &rng) {
+                .mediatorApprentice
+            } else {
+                .apprentice
+            }
             setRank(rank, for: id, in: &clan, using: &rng)
             return [.apprenticed(id, mentor: clan[id]?.mentor, oldName: oldName)]
         }
@@ -196,11 +209,26 @@ struct MoonEngine: Sendable {
             let maxAge = cat.rank == .medicineApprentice ? 30 : 25
             if (cat.experience > 50 && cat.moons >= 10) || cat.moons >= maxAge {
                 graduationInfluence(on: id, from: cat.mentor, in: &clan, using: &rng)
-                setRank(cat.rank == .medicineApprentice ? .medicineCat : .warrior, for: id, in: &clan, using: &rng)
+                let graduate: Rank = switch cat.rank {
+                case .medicineApprentice: .medicineCat
+                case .mediatorApprentice: .mediator
+                default: .warrior
+                }
+                setRank(graduate, for: id, in: &clan, using: &rng)
                 return [.graduated(id, oldName: oldName)]
             }
         }
         return []
+    }
+
+    /// Clangen's `_is_suitable_mediator_app`: only when a mediator is free to take an apprentice.
+    private func becomesMediatorApprentice(_ cat: Cat, in clan: Clan, using rng: inout some RandomNumberGenerator) -> Bool {
+        let mediators = clan.living.filter { $0.rank == .mediator }
+        guard !mediators.isEmpty, mediators.allSatisfy({ $0.apprentices.isEmpty }) else { return false }
+        var chance = 50
+        if ["charismatic", "loving", "responsible", "wise", "thoughtful"].contains(cat.personality.trait) { chance = Int(Double(chance) / 1.5) }
+        if cat.isDisabled { chance /= 2 }
+        return oneIn(max(1, chance), &rng)
     }
 
     /// Clangen's `_is_suitable_medcat_app`, without personality and skill modifiers.
@@ -227,6 +255,7 @@ struct MoonEngine: Sendable {
     /// Changes rank and keeps mentor links valid, like Clangen's `rank_change`.
     func setRank(_ rank: Rank, for id: UUID, in clan: inout Clan, using rng: inout some RandomNumberGenerator) {
         guard let i = clan.index(of: id) else { return }
+        if clan.cats[i].rank != rank { clan.cats[i].pastRanks.append(clan.cats[i].rank) }
         clan.cats[i].rank = rank
         if !rank.isBaby { clan.cats[i].nextThought = .onRankChange }
         factory.traits.setKit(rank.isBaby, &clan.cats[i].personality, using: &rng)
@@ -245,6 +274,7 @@ struct MoonEngine: Sendable {
         switch apprentice.rank {
         case .apprentice: return [.leader, .deputy, .warrior].contains(mentor.rank)
         case .medicineApprentice: return mentor.rank == .medicineCat
+        case .mediatorApprentice: return mentor.rank == .mediator
         default: return false
         }
     }

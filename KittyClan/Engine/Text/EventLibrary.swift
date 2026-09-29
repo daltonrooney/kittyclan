@@ -141,7 +141,7 @@ struct EventLibrary: Sendable {
         }
 
         var ceremonies: [String: [Ceremony]] = [:]
-        for name in ["apprentice", "medicine_cat_apprentice", "warrior", "medicine_cat", "deputy", "leader", "elder"] {
+        for name in ["apprentice", "medicine_cat_apprentice", "mediator_apprentice", "warrior", "medicine_cat", "mediator", "deputy", "leader", "elder"] {
             ceremonies[name] = try events("ceremonies/\(name).json").compactMap(Ceremony.init)
         }
         self.ceremonies = ceremonies
@@ -194,6 +194,8 @@ struct EventLibrary: Sendable {
         case .medicineApprentice: "medicine_cat_apprentice"
         case .warrior: "warrior"
         case .medicineCat: "medicine_cat"
+        case .mediator: "mediator"
+        case .mediatorApprentice: "mediator_apprentice"
         case .deputy: "deputy"
         case .leader: "leader"
         case .elder: "elder"
