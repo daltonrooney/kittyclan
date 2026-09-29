@@ -100,6 +100,11 @@ struct Clan: Codable, Sendable {
     /// Clangen's `fading` setting: long-dead cats fade from the afterlife.
     var fading = true
     var faded: [FadedCat] = []
+    /// Clan cats who died since the last moon's mourning.
+    var diedThisMoon: [UUID] = []
+    var pendingEvents: [PendingEvent] = []
+    /// Whether cats may murder each other, as they can in Clangen.
+    var allowMurder = true
     /// Clangen's `same sex adoption` setting: mates who can't have kits together may find a litter to adopt.
     var sameSexAdoption = false
 
@@ -212,6 +217,9 @@ extension Clan {
         guide = try c.decodeIfPresent(UUID.self, forKey: .guide)
         fading = try c.decodeIfPresent(Bool.self, forKey: .fading) ?? true
         faded = try c.decodeIfPresent([FadedCat].self, forKey: .faded) ?? []
+        diedThisMoon = try c.decodeIfPresent([UUID].self, forKey: .diedThisMoon) ?? []
+        pendingEvents = try c.decodeIfPresent([PendingEvent].self, forKey: .pendingEvents) ?? []
+        allowMurder = try c.decodeIfPresent(Bool.self, forKey: .allowMurder) ?? true
         sameSexAdoption = try c.decodeIfPresent(Bool.self, forKey: .sameSexAdoption) ?? false
     }
 }

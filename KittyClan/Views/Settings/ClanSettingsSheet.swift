@@ -11,6 +11,17 @@ struct ClanSettingsSheet: View {
                 if let clan = model.clan {
                     Section {
                         LabeledContent {
+                            Text(clan.biome.label(camp: clan.camp))
+                        } label: {
+                            Label("Home", systemImage: clan.biome.symbol)
+                        }
+                    } header: {
+                        Text("Territory")
+                    } footer: {
+                        Text("Chosen when the Clan was founded.")
+                    }
+                    Section {
+                        LabeledContent {
                             Text(clan.preyAndHerbs ? "On" : "Off")
                         } label: {
                             Label("Prey and herbs", systemImage: "fish.fill")
@@ -28,6 +39,13 @@ struct ClanSettingsSheet: View {
                     Section("Clan life") {
                         toggle("Warriors and elders may become mediators", systemImage: "person.2.wave.2.fill", option: \.becomeMediator)
                         toggle("Same-sex mates adopt kits", systemImage: "figure.and.child.holdinghands", option: \.sameSexAdoption)
+                    }
+                    Section {
+                        toggle("Murders can happen", systemImage: "drop.fill", option: \.allowMurder)
+                    } header: {
+                        Text("Darker events")
+                    } footer: {
+                        Text("Cats who bitterly dislike a Clanmate may secretly kill them, and the truth can come out moons later.")
                     }
                     Section {
                         toggle("Dead cats fade", systemImage: "aqi.low", option: \.fading)

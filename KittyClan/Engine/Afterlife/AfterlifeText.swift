@@ -68,9 +68,30 @@ struct AfterlifeText: Sendable {
                 extraLives = 0
             }
             if !text.hasSuffix(".") { text += "." }
-            lines.append("\(text) (moon \(record.moon))")
+            var line = "\(text) (moon \(record.moon))"
+            if let murder = cat.murders.first(where: { $0.victim == cat.id && $0.moon == record.moon }) {
+                line += " " + status(of: murder, in: clan)
+            }
+            lines.append(line)
         }
         return lines
+    }
+
+    /// Clangen's `get_murder_text`: the murders this cat has committed.
+    func murders(by cat: Cat, in clan: Clan) -> [String] {
+        cat.murders.filter { $0.murderer == cat.id }.map { murder in
+            let victim = clan[murder.victim].map { template.names.display($0.name, rank: $0.rank) }
+                ?? clan.faded.first { $0.id == murder.victim }.map { template.names.display($0.name, rank: $0.rank) } ?? "a Clanmate"
+            let name = template.names.display(cat.name, rank: cat.rank)
+            return "\(name) murdered \(victim). (moon \(murder.moon)) " + status(of: murder, in: clan)
+        }
+    }
+
+    /// Clangen's `get_murder_status_text`.
+    private func status(of murder: MurderRecord, in clan: Clan) -> String {
+        if murder.revealedToClan { return "The Clan knows." }
+        let aware = murder.aware.compactMap { clan[$0] }.map { template.names.display($0.name, rank: $0.rank) }
+        return (aware.isEmpty ? "" : "\(TextTemplate.joined(aware)) \(aware.count == 1 ? "knows" : "know"). ") + "The Clan is unaware."
     }
 
     /// The leader's nine-lives ceremony as paragraphs.

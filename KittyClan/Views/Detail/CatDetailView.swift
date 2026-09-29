@@ -51,6 +51,7 @@ struct CatDetailView: View {
                         .id(DetailSection.history)
                 } else {
                     CatHealthSection(cat: cat)
+                    CatDeathHistorySection(cat: cat)
                 }
                 CatFamilySection(cat: cat, showFamilyTree: showFamilyTree)
                     .id(DetailSection.family)

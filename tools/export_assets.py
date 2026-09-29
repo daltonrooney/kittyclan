@@ -248,6 +248,8 @@ def export_text():
     thoughts = lang / "thoughts"
     for path in sorted(thoughts.rglob("*.json")):
         files.setdefault(str(path.parent.relative_to(lang)), []).append(path)
+    for family in ("general", "mate", "parent", "child", "sibling"):
+        files[f"death_reactions/{family}"] = sorted((events / "death" / "death_reactions" / family).glob("*.json"))
     files["afterlife"] = [
         events / "lead_ceremony_sc.json", events / "lead_ceremony_df.json",
         lang / "cat" / "afterlife.en.json", lang / "cat" / "backstories.en.json",

@@ -249,7 +249,7 @@ struct ThoughtLibrary: Sendable {
             keys = ["on_meeting/" + (isOutsider ? "outsider" : "clancat")]
         case .onBirth:
             keys = ["on_birth/parent"]
-        case .onJoin, .onExile, .onLost:
+        case .onJoin, .onExile, .onLost, .onGriefTowardBody, .onGriefNoBody:
             keys = ["\(kind.rawValue)/general"]
         }
         return keys.flatMap { files[$0] ?? [] }

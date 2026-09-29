@@ -10,6 +10,7 @@ struct MoonEngine: Sendable {
     var herbLibrary: HerbLibrary?
     var ceremonies: LeaderCeremonyLibrary?
     var thoughts: ThoughtLibrary?
+    var grief: GriefLibrary?
 
     private static let canHaveKits: Set<Rank> = [.leader, .deputy, .medicineCat, .mediator, .warrior, .elder]
     private static let litterWeights: [CatAge: [Int]] = [
@@ -36,6 +37,7 @@ struct MoonEngine: Sendable {
         events += resolveLeaderDen(in: &clan, using: &rng)
         var interactions: [UUID: Int] = [:]
         events += lostCatReturns(in: &clan, counts: &interactions, using: &rng)
+        events += pendingEventsMoon(in: &clan, counts: &interactions, using: &rng)
         freshKillMoon(in: &clan, patrolled: patrolled, using: &rng)
 
         var someoneJoined = false
@@ -111,6 +113,7 @@ struct MoonEngine: Sendable {
                 events += rollIllness(for: id, in: &clan, using: &rng)
                 if clan.isAlive(id) { events += deathRolls(for: id, in: &clan, using: &rng) }
             }
+            events += handleMurder(by: id, in: &clan, counts: &interactions, using: &rng)
         }
         events += outsiderMoon(in: &clan, skipping: denTarget, using: &rng)
         let lowOnPrey = clan.preyAndHerbs && Self.preyNeeded(in: clan) > clan.freshKill.total
@@ -129,6 +132,7 @@ struct MoonEngine: Sendable {
             }
         }
         events += promoteDeputy(in: &clan, using: &rng)
+        events += mourn(in: &clan, using: &rng)
         generateThoughts(in: &clan, using: &rng)
 
         let entries = events.map { narrator.entry($0, in: clan, using: &rng) }
@@ -537,7 +541,11 @@ struct MoonEngine: Sendable {
               pick.deaths.contains(id),
               addNewCats(to: &pick, in: &clan, counts: &counts, using: &rng) != nil
         else { return loseLifeOrDie(id, cause: cause, history: cause == .oldAge ? "m_c died of old age." : nil, in: &clan, using: &rng) }
+        return applyDeathEvent(pick, cause: cause, in: &clan, using: &rng)
+    }
 
+    /// Carries out a death event: its effects, then each death, with leaders losing lives.
+    func applyDeathEvent(_ pick: StoryPick, cause: DeathCause, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [MoonEvent] {
         relationships?.apply(pick.relationshipChanges, cats: pick.allCats, in: &clan, using: &rng)
         applyInjuries(pick.injuries, cats: pick.cats, in: &clan, using: &rng)
         applyEventEffects(pick, in: &clan, using: &rng)
@@ -559,7 +567,7 @@ struct MoonEngine: Sendable {
                 }
             }
             let (history, involved) = pick.deathHistory(for: victim)
-            let outcome = loseLifeOrDie(victim, cause: cause, history: history, involved: involved, in: &clan, using: &rng)
+            let outcome = loseLifeOrDie(victim, cause: cause, history: history, involved: involved, body: !pick.noBody, in: &clan, using: &rng)
             events += outcome.filter { if case .died = $0 { false } else { true } }
         }
         return events
@@ -569,7 +577,7 @@ struct MoonEngine: Sendable {
     /// - Parameters:
     ///   - history: Clangen death-history text, with `m_c` for this cat and `r_c` for `involved`.
     func loseLifeOrDie(
-        _ id: UUID, cause: DeathCause, history: String? = nil, involved: UUID? = nil,
+        _ id: UUID, cause: DeathCause, history: String? = nil, involved: UUID? = nil, body: Bool = true,
         in clan: inout Clan, using rng: inout some RandomNumberGenerator
     ) -> [MoonEvent] {
         guard let i = clan.index(of: id) else { return [] }
@@ -591,7 +599,8 @@ struct MoonEngine: Sendable {
             Self.assignMentor(to: apprentice, in: &clan, using: &rng)
         }
         if clan.leader == id { clan.leaderLives = 0 }
-        return [.died(id, cause)]
+        clan.diedThisMoon.append(id)
+        return [.died(id, cause)] + grieve(for: id, body: body, in: &clan, using: &rng)
     }
 
     /// Death history used when no event supplies one.

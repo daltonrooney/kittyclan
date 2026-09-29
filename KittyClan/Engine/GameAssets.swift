@@ -32,7 +32,8 @@ struct GameAssets: Sendable {
             conditions: try ConditionLibrary(directory: text),
             herbLibrary: try HerbLibrary(directory: text),
             ceremonies: try LeaderCeremonyLibrary(directory: text),
-            thoughts: try ThoughtLibrary(directory: text)
+            thoughts: try ThoughtLibrary(directory: text),
+            grief: try GriefLibrary(directory: text)
         )
         let patrolLibrary = try PatrolLibrary(directory: text, artDirectory: Bundle.main.url(forResource: "PatrolArt", withExtension: nil))
         return GameAssets(

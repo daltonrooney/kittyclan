@@ -132,6 +132,7 @@ struct Constraint: Sendable {
 
     private static let flagTags: Set<String> = [
         "classic", "no_body", "all_lives", "some_lives", "lives_remain", "high_lives", "mid_lives", "low_lives", "romance",
+        "clan_wide",
         "adoption",
     ]
     private static let blockedTokens = [

@@ -44,7 +44,9 @@ enum MoonEvent: Sendable {
         switch self {
         case .founded, .noDeputy, .lowPrey: []
         case .apprenticed(let cat, let mentor, _): [cat] + [mentor].compactMap { $0 }
-        case .story(let pick, _): pick.cats.sorted { $0.key < $1.key }.map(\.value)
+        case .story(let pick, _):
+            pick.cats.filter { !pick.excludedCats.contains($0.key) }.sorted { $0.key < $1.key }.map(\.value)
+                + pick.groupCats.sorted { $0.key < $1.key }.flatMap(\.value)
         case .newMentor(let a, let m): [a, m]
         case .graduated(let c, _), .retired(let c), .deputyAppointed(let c), .becameLeader(let c, _), .becameMediator(let c, _): [c]
         case .joined(let c, let by): [c, by]

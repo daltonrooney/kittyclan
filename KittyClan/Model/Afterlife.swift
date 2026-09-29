@@ -165,3 +165,22 @@ extension Clan {
         return guide + residents.filter { $0.id != self.guide }
     }
 }
+
+/// Clangen's murder history, kept on both the murderer and the victim.
+struct MurderRecord: Codable, Hashable, Sendable {
+    var murderer: UUID
+    var victim: UUID
+    var moon: Int
+    var revealedToClan = false
+    /// Cats who know without the Clan knowing.
+    var aware: [UUID] = []
+}
+
+/// A Clangen `future_event` waiting to happen, e.g. a murder coming to light.
+struct PendingEvent: Codable, Hashable, Sendable {
+    var eventType: String
+    var subTypes: [String]
+    var moonsLeft: Int
+    /// Cats carried over from the event that scheduled it, by abbreviation.
+    var cats: [String: UUID]
+}

@@ -5,6 +5,7 @@ enum ThoughtKind: String, Codable, Sendable, CaseIterable {
     case isGuide = "is_guide", whileDead = "while_dead", whileAlive = "while_alive"
     case onDeath = "on_death", onBirth = "on_birth", onMeeting = "on_meeting", onJoin = "on_join"
     case onExile = "on_exile", onLost = "on_lost", onRankChange = "on_rank_change"
+    case onGriefTowardBody = "on_grief_toward_body", onGriefNoBody = "on_grief_no_body"
 }
 
 /// The one-line thought on a cat's profile: Clangen text with `m_c` for the cat and `r_c` for `about`.

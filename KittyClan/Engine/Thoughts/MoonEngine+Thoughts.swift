@@ -8,13 +8,14 @@ extension MoonEngine {
         var used: Set<String> = []
         func next(for cat: Cat) -> Thought? {
             let kind = cat.nextThought ?? (cat.id == clan.guide ? .isGuide : cat.isDead ? .whileDead : .whileAlive)
-            return thoughts.thought(kind, for: cat, in: context, used: &used, using: &rng)
+            return thoughts.thought(kind, for: cat, about: clan[cat.nextThoughtAbout], in: context, used: &used, using: &rng)
                 ?? (kind == .whileAlive || kind == .whileDead ? nil
                     : thoughts.thought(cat.isDead ? .whileDead : .whileAlive, for: cat, in: context, used: &used, using: &rng))
         }
         for i in clan.cats.indices {
             clan.cats[i].thought = next(for: clan.cats[i])
             clan.cats[i].nextThought = nil
+            clan.cats[i].nextThoughtAbout = nil
         }
         for i in clan.outsiders.indices {
             clan.outsiders[i].thought = next(for: clan.outsiders[i])

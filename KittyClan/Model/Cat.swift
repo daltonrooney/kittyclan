@@ -113,9 +113,12 @@ struct Cat: Identifiable, Codable, Hashable, Sendable {
     /// A Clangen backstory key, e.g. `clan_guide3`.
     var backstory: String?
     var leaderCeremony: [CeremonyLine] = []
+    var murders: [MurderRecord] = []
     var thought: Thought?
     /// Set by this moon's events; nil means the everyday thought for the cat's state.
     var nextThought: ThoughtKind?
+    /// Who the next thought is about, e.g. a Clanmate who just died.
+    var nextThoughtAbout: UUID?
 
     /// Outsiders only: lost from the Clan, exiled from it, or driven out of the area.
     var isLost = false
@@ -198,8 +201,10 @@ extension Cat {
         preventFading = try c.decodeIfPresent(Bool.self, forKey: .preventFading) ?? false
         backstory = try c.decodeIfPresent(String.self, forKey: .backstory)
         leaderCeremony = try c.decodeIfPresent([CeremonyLine].self, forKey: .leaderCeremony) ?? []
+        murders = try c.decodeIfPresent([MurderRecord].self, forKey: .murders) ?? []
         thought = try c.decodeIfPresent(Thought.self, forKey: .thought)
         nextThought = try c.decodeIfPresent(ThoughtKind.self, forKey: .nextThought)
+        nextThoughtAbout = try c.decodeIfPresent(UUID.self, forKey: .nextThoughtAbout)
         isLost = try c.decodeIfPresent(Bool.self, forKey: .isLost) ?? false
         isExiled = try c.decodeIfPresent(Bool.self, forKey: .isExiled) ?? false
         isNear = try c.decodeIfPresent(Bool.self, forKey: .isNear) ?? true

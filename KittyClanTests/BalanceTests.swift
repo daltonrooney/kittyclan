@@ -15,6 +15,7 @@ final class BalanceTests: XCTestCase {
                 prefix: "Test", leader: adults[0], deputy: adults[1], medicineCat: adults[2],
                 members: Array(others.prefix(7)), preyAndHerbs: preyAndHerbs, engine: Self.assets.engine, using: &rng
             )
+            clan.allowMurder = false
             for _ in 0..<moons { Self.assets.engine.advance(&clan, using: &rng) }
             return clan.living.count
         }.reduce(0, +)

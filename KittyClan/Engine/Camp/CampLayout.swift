@@ -44,8 +44,6 @@ struct CampLayout: Sendable {
 
 /// Clangen's camps for each biome and their seasonal backgrounds.
 struct CampLibrary: Sendable {
-    static let names = Biome.forest.campNames
-
     private let byBiome: [Biome: [Int: CampLayout]]
     private let directory: URL
 
@@ -67,23 +65,20 @@ struct CampLibrary: Sendable {
         return try CampLibrary(directory: url)
     }
 
-    /// Forest layouts by camp number.
-    var layouts: [Int: CampLayout] { byBiome[.forest] ?? [:] }
-
     /// A camp's den labels and cat spots. Plains' Grasslands has none of its own and uses Clangen's default.
     func layout(biome: Biome, camp: Int) -> CampLayout? {
         byBiome[biome]?[camp] ?? byBiome[biome]?[1]
     }
 
     /// The background for a camp in a season, light or dark.
-    func background(biome: Biome = .forest, camp: Int, season: Season, dark: Bool) -> URL {
+    func background(biome: Biome, camp: Int, season: Season, dark: Bool) -> URL {
         let seasonKey = season.rawValue.lowercased().replacingOccurrences(of: "-", with: "")
         return directory.appending(path: "\(biome.key)/\(seasonKey)_camp\(camp)_\(dark ? "dark" : "light").png")
     }
 
     /// Clangen's `choose_cat_positions`: each spot holds up to two cats, dens are chosen by
     /// rank weights, and when a den fills, cats spill into others. Newborns hide.
-    func place(_ cats: [Cat], biome: Biome = .forest, camp: Int, using rng: inout some RandomNumberGenerator) -> [(cat: UUID, point: CGPoint)] {
+    func place(_ cats: [Cat], biome: Biome, camp: Int, using rng: inout some RandomNumberGenerator) -> [(cat: UUID, point: CGPoint)] {
         guard let layout = layout(biome: biome, camp: camp) else { return [] }
         let order: [Den] = [.nursery, .leader, .elder, .medicine, .apprentice, .clearing, .warrior]
         var free = layout.spots.mapValues { $0 + $0 }
