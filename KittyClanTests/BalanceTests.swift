@@ -45,13 +45,13 @@ final class BalanceTests: XCTestCase {
         let odds = engine.kitChance(he, she, in: clan)
         XCTAssertLessThanOrEqual(odds, 20, "a small Clan's pair has good odds")
         var pregnant = 0
-        let trials = 300
+        let trials = 800
         for _ in 0..<trials {
             var copy = clan
             engine.advance(&copy, using: &rng)
             if copy.pregnancies[she.id] != nil { pregnant += 1 }
         }
         let expected = Double(trials) * (1 - pow(1 - 1 / Double(odds), 2))
-        XCTAssertGreaterThan(Double(pregnant), expected * 0.6, "both mates roll")
+        XCTAssertGreaterThan(Double(pregnant), expected * 0.7, "both mates roll")
     }
 }
