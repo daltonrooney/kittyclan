@@ -8,7 +8,10 @@ extension Cat {
         conditions.filter(\.isRevealed)
     }
 
-    var hasVisibleSickness: Bool { visibleConditions.contains { $0.kind != .permanent } }
+    var hasVisibleSickness: Bool { visibleConditions.contains { $0.kind != .permanent && !$0.isBirthCondition } }
+
+    /// Pregnant or recovering from giving birth, which Clangen shows apart from other injuries.
+    var hasBirthCondition: Bool { conditions.contains(where: \.isBirthCondition) }
 
     var hasVisiblePermanentCondition: Bool { visibleConditions.contains { $0.kind == .permanent } }
 }

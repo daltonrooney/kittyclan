@@ -22,7 +22,7 @@ extension MoonEngine {
 
     /// Whether romance can be mediated: both 12+ moons or the same age, and not related.
     static func canMediateRomance(_ a: Cat, _ b: Cat, in clan: Clan) -> Bool {
-        (a.moons >= 12 && b.moons >= 12 || a.age == b.age) && !clan.areRelated(a.id, b.id)
+        (a.moons >= 12 && b.moons >= 12 || a.age == b.age) && !clan.areRelatedForMating(a.id, b.id)
     }
 
     /// Mediates between two cats. Returns the result lines, or nil when `mediationBlock` forbids it.

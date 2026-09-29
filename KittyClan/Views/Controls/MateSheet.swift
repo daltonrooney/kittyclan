@@ -32,6 +32,13 @@ struct MateSheet: View {
                                  ? "They'll think less of each other afterwards."
                                  : "\(name) and \(model.displayName(other)) will become mates.")
                         }
+                    Toggle(isOn: noMates) {
+                        Label("Limit romance and mate changes", systemImage: "heart.slash")
+                        Text("No new mates or breakups by chance, and romance only with current mates.")
+                    }
+                    .padding()
+                    .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
+                    .disabled(model.isAdvancing)
                     Picker("Show", selection: $tab) {
                         ForEach(MateTab.allCases) { Text($0.rawValue).tag($0) }
                     }
@@ -92,6 +99,10 @@ struct MateSheet: View {
         guard let confirming else { return "" }
         let other = model.displayName(confirming)
         return current.mates.contains(confirming.id) ? "Break up with \(other)?" : "Make it official with \(other)?"
+    }
+
+    private var noMates: Binding<Bool> {
+        Binding { current.noMates } set: { on in Task { await model.setNoMates(on, for: cat.id) } }
     }
 
     private var isConfirming: Binding<Bool> {

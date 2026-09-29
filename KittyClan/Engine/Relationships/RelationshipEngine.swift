@@ -352,11 +352,13 @@ struct RelationshipEngine: Sendable {
             let back = clan.relationship(from: other.id, to: id) ?? Relationship()
             return (there[.like] > 10 || there[.comfort] > 10) && (back[.like] > 10 || back[.comfort] > 10)
         }
+        var useMate = false
         if !cat.mates.isEmpty {
             let odds = 15 - cat.mates.reduce(0) { $0 + (clan.relationship(from: id, to: $1)?[.romance] ?? 0) / 20 }
-            if Int.random(in: 0..<max(odds, 1), using: &rng) != 0 {
-                pool = cat.mates.compactMap { clan[$0] }.filter(\.isAlive)
-            }
+            useMate = Int.random(in: 0..<max(odds, 1), using: &rng) != 0
+        }
+        if useMate || cat.noMates {
+            pool = cat.mates.compactMap { clan[$0] }.filter(\.isAlive)
         }
         guard let other = pool.randomElement(using: &rng) else { return nil }
         return interact(id, other.id, kind: .romance, joining: false, in: &clan, counts: &counts, using: &rng)
@@ -388,11 +390,11 @@ struct RelationshipEngine: Sendable {
     }
 
     private func matesAndBreakups(_ id: UUID, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [MoonEvent] {
-        guard let cat = clan[id] else { return [] }
+        guard let cat = clan[id], !cat.noMates else { return [] }
         var events: [MoonEvent] = []
 
         for mateID in cat.mates {
-            guard let mate = clan[mateID] else { continue }
+            guard let mate = clan[mateID], !mate.noMates else { continue }
             if mate.isDead, let died = mate.diedAtClanAge, clan.age - died >= 4 {
                 var p = 0.4
                 if cat.personality.stability > 8 { p -= 0.1 }

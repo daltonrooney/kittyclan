@@ -92,6 +92,7 @@ final class OtherClanTests: XCTestCase {
 
     func testExiledCatsStayOut() {
         var (clan, rng) = clan(seed: 10)
+        clan.autoDeputy = true
         let deputy = clan.deputy!
         engine.exileCat(deputy, in: &clan, using: &rng)
         XCTAssertNil(clan.deputy)

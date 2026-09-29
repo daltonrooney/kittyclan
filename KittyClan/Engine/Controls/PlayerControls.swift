@@ -35,9 +35,9 @@ extension Clan {
     func canChooseMate(_ a: Cat, _ b: Cat) -> Bool {
         guard a.id != b.id, !a.mates.contains(b.id), a.isDead == b.isDead,
               isOutsider(a.id) == isOutsider(b.id), a.afterlife == b.afterlife,
-              !areRelated(a.id, b.id), a.moons >= 12, b.moons >= 12
+              !areRelatedForMating(a.id, b.id), a.moons >= 12, b.moons >= 12
         else { return false }
-        return a.mentor != b.id && b.mentor != a.id
+        return a.mentor != b.id && b.mentor != a.id && (romanceWithFormerMentor || !isFormerMentor(a, b))
     }
 
     /// Possible mates in roster order. `singleOnly` hides cats who already have a mate;
@@ -46,7 +46,7 @@ extension Clan {
         guard let cat = self[id] else { return [] }
         let pool = isOutsider(id) ? outsiders : cats
         return pool.filter { other in
-            canChooseMate(cat, other) && (!singleOnly || other.mates.isEmpty) && (!kitsOnly || other.sex != cat.sex)
+            canChooseMate(cat, other) && (!singleOnly || other.mates.isEmpty) && (!kitsOnly || sameSexBirth || other.sex != cat.sex)
         }
     }
 
@@ -213,21 +213,27 @@ extension MoonEngine {
 }
 
 extension RelationshipEngine {
-    /// Clangen's player-initiated breakup: both cats' feelings drop, then they stop being mates.
-    func breakUp(_ a: UUID, _ b: UUID, in clan: inout Clan, using rng: inout some RandomNumberGenerator) {
+    /// Clangen's `unset_mate` for a chosen breakup: both cats' feelings drop, more so after a
+    /// fight, then they stop being mates.
+    func breakUp(_ a: UUID, _ b: UUID, fight: Bool = false, in clan: inout Clan, using rng: inout some RandomNumberGenerator) {
         guard clan[a]?.mates.contains(b) == true else { return }
         if clan[a]?.isAlive == true {
             clan.updateRelationship(from: a, to: b) {
                 $0.add(.romance, -Int.random(in: 20...60, using: &rng))
                 $0.add(.comfort, -Int.random(in: 10...30, using: &rng))
                 $0.add(.trust, -Int.random(in: 5...15, using: &rng))
+                if fight {
+                    $0.add(.romance, -Int.random(in: 10...30, using: &rng))
+                    $0.add(.like, -Int.random(in: 15...45, using: &rng))
+                }
             }
         }
         if clan[b]?.isAlive == true {
             clan.updateRelationship(from: b, to: a) {
-                $0.add(.romance, -40)
+                $0.add(.romance, fight ? -60 : -40)
                 $0.add(.comfort, -20)
                 $0.add(.trust, -10)
+                if fight { $0.add(.like, -30) }
             }
         }
         unsetMates(a, b, in: &clan)

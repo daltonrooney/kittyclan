@@ -142,6 +142,8 @@ struct Cat: Identifiable, Codable, Hashable, Sendable {
     var adoptiveParents: [UUID] = []
     var mates: [UUID] = []
     var previousMates: [UUID] = []
+    /// Clangen's `no_mates`: no automatic mates or breakups, and romance only with current mates.
+    var noMates = false
     var birthCooldown = 0
     var conditions: [CatCondition] = []
 
@@ -239,6 +241,7 @@ extension Cat {
         adoptiveParents = try c.decodeIfPresent([UUID].self, forKey: .adoptiveParents) ?? []
         mates = try c.decodeIfPresent([UUID].self, forKey: .mates) ?? []
         previousMates = try c.decodeIfPresent([UUID].self, forKey: .previousMates) ?? []
+        noMates = try c.decodeIfPresent(Bool.self, forKey: .noMates) ?? false
         birthCooldown = try c.decodeIfPresent(Int.self, forKey: .birthCooldown) ?? 0
         conditions = try c.decodeIfPresent([CatCondition].self, forKey: .conditions) ?? []
         isDead = try c.decodeIfPresent(Bool.self, forKey: .isDead) ?? false

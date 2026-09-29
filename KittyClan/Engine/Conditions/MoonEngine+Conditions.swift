@@ -49,7 +49,7 @@ extension MoonEngine {
     @discardableResult
     func getInjured(
         _ id: UUID, _ name: String, eventTriggered: Bool = false, lethal: Bool = true, scars: [String]? = nil,
-        in clan: inout Clan, using rng: inout some RandomNumberGenerator
+        severity: String? = nil, in clan: inout Clan, using rng: inout some RandomNumberGenerator
     ) -> Bool {
         guard let library = conditions, let info = library.conditions[name], info.kind == .injury,
               let i = clan.index(of: id), clan.cats[i].isAlive, !clan.cats[i].has(name)
@@ -59,7 +59,7 @@ extension MoonEngine {
         if name == "torn ear", scarsNow.contains("NOEAR") { return false }
         let mortality = lethal ? info.mortality[clan.cats[i].age.rawValue] ?? 0 : 0
         clan.cats[i].conditions.append(CatCondition(
-            kind: .injury, name: name, severity: info.severity, mortality: mortality, duration: info.duration,
+            kind: .injury, name: name, severity: severity ?? info.severity, mortality: mortality, duration: info.duration,
             moonStart: clan.age, risks: info.risks, eventTriggered: eventTriggered,
             potentialScars: scars.flatMap { $0.isEmpty ? nil : $0 }
         ))
@@ -151,7 +151,14 @@ extension MoonEngine {
         order.shuffle(using: &rng)
         var events: [MoonEvent] = []
         for kind in order where clan.isAlive(id) {
-            if kind == .injury, clan.pregnancies[id] != nil { continue }
+            if kind == .injury, cat.has("pregnant") || clan.pregnancies[id] != nil {
+                // Clangen's `handle_injuries`: a pregnancy pauses every injury, and a stray
+                // pregnant condition with no pregnancy behind it is cleared.
+                if clan.pregnancies[id] == nil, let i = clan.index(of: id) {
+                    clan.cats[i].conditions.removeAll { $0.name == "pregnant" && $0.kind == .injury }
+                }
+                continue
+            }
             events += progress(kind, for: id, skip: &skip, in: &clan, using: &rng)
         }
         return events
@@ -373,7 +380,7 @@ extension MoonEngine {
     }
 
     private func retireForDisability(_ id: UUID, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [MoonEvent] {
-        guard let cat = clan[id], cat.isAlive, [.apprentice, .warrior].contains(cat.rank) else { return [] }
+        guard !clan.noConditionRetirement, let cat = clan[id], cat.isAlive, [.apprentice, .warrior].contains(cat.rank) else { return [] }
         for condition in cat.permanentConditions {
             guard let odds = ConditionLibrary.retirementOdds[condition.severity]?[cat.age], oneIn(odds, &rng) else { continue }
             let text: String

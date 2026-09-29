@@ -1,11 +1,14 @@
 import SwiftUI
 
-/// Small corner badges for a cat who is hurt or ill, or lives with a permanent condition.
+/// Small corner badges for a cat who is expecting kits, hurt or ill, or lives with a permanent condition.
 struct HealthBadges: View {
     let cat: Cat
 
     var body: some View {
         HStack(spacing: 2) {
+            if cat.hasBirthCondition {
+                badge("figure.and.child.holdinghands", .pink)
+            }
             if cat.hasVisibleSickness {
                 badge("cross.case.fill", .red)
             }

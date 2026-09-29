@@ -80,10 +80,15 @@ struct CatFactory: Sendable {
 
     /// A newborn whose looks are inherited from its parents.
     func makeKit(mother: Cat, father: Cat, theyThem: Bool = false, using rng: inout some RandomNumberGenerator) -> Cat {
+        makeKit(parents: [mother, father], theyThem: theyThem, using: &rng)
+    }
+
+    /// A newborn whose looks are inherited from one or two blood parents, birth parent first.
+    func makeKit(parents: [Cat], theyThem: Bool = false, using rng: inout some RandomNumberGenerator) -> Cat {
         let sex: Cat.Sex = Bool.random(using: &rng) ? .female : .male
         let looks = appearance.generate(
             female: sex == .female, age: .newborn,
-            parents: [mother.appearance, father.appearance], using: &rng
+            parents: parents.map(\.appearance), using: &rng
         )
         var kit = Cat(
             id: UUID(),
@@ -96,7 +101,7 @@ struct CatFactory: Sendable {
             personality: traits.random(kit: true, using: &rng),
             rank: .newborn,
             origin: .clanborn,
-            parents: [mother.id, father.id]
+            parents: parents.map(\.id)
         )
         kit.backstory = "clanborn"
         return kit
