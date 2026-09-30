@@ -4,6 +4,7 @@ import SwiftUI
 struct MediationSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let mediator: Cat.ID?
 
     @State private var mediatorID: Cat.ID?
@@ -34,6 +35,29 @@ struct MediationSheet: View {
         }
         .modifier(PageSheetSizing())
         .onAppear(perform: chooseMediator)
+    }
+
+    private var randomPairButton: some View {
+        Button("Random Pair", systemImage: "dice.fill", action: pickRandom)
+            .buttonStyle(.bordered)
+    }
+
+    private func mediateButtons(_ block: MediationBlock?) -> some View {
+        Group {
+            Button { mediate(sabotage: true) } label: {
+                Label("Sabotage", systemImage: "hand.thumbsdown.fill")
+                    .frame(maxWidth: sizeClass == .compact ? .infinity : nil)
+            }
+            .buttonStyle(.bordered)
+            .tint(.red)
+            Button { mediate(sabotage: false) } label: {
+                Label("Improve", systemImage: "hand.thumbsup.fill")
+                    .frame(maxWidth: sizeClass == .compact ? .infinity : nil)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.teal)
+        }
+        .disabled(block != nil)
     }
 
     private func content(_ mediator: Cat) -> some View {
@@ -71,19 +95,22 @@ struct MediationSheet: View {
                     .background(.background, in: .rect(cornerRadius: 16))
                 }
 
-                HStack(spacing: 12) {
-                    Button("Random Pair", systemImage: "dice.fill", action: pickRandom)
-                        .buttonStyle(.bordered)
-                    Spacer()
-                    Group {
-                        Button("Sabotage", systemImage: "hand.thumbsdown.fill") { mediate(sabotage: true) }
-                            .buttonStyle(.bordered)
-                            .tint(.red)
-                        Button("Improve", systemImage: "hand.thumbsup.fill") { mediate(sabotage: false) }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.teal)
+                Group {
+                    if sizeClass == .compact {
+                        VStack(alignment: .leading, spacing: 12) {
+                            randomPairButton
+                            HStack(spacing: 12) {
+                                mediateButtons(block)
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                    } else {
+                        HStack(spacing: 12) {
+                            randomPairButton
+                            Spacer()
+                            mediateButtons(block)
+                        }
                     }
-                    .disabled(block != nil)
                 }
                 .disabled(model.isAdvancing)
                 .controlSize(.large)

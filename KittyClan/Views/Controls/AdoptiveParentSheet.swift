@@ -133,34 +133,60 @@ enum AdoptiveParentTab: String, CaseIterable, Identifiable {
 
 private struct AdoptiveParentBar: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let cat: Cat
     let selection: Cat?
     let adopt: () -> Void
     let unadopt: () -> Void
 
     var body: some View {
-        HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                Text("Adoptive parents must be at least 14 moons older.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            if let selection, cat.adoptiveParents.contains(selection.id) {
-                Button("Unset Adoptive Parent", role: .destructive, action: unadopt)
-                    .buttonStyle(.bordered)
+        Group {
+            if sizeClass == .compact {
+                VStack(alignment: .leading, spacing: 12) {
+                    status
+                    button
+                }
             } else {
-                Button("Set Adoptive Parent", action: adopt)
-                    .buttonStyle(.borderedProminent)
-                    .tint(.brown)
-                    .disabled(selection == nil)
+                HStack(spacing: 16) {
+                    status
+                    Spacer()
+                    button
+                }
             }
         }
         .disabled(model.isAdvancing)
         .padding()
         .background(.bar)
+    }
+
+    private var status: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.headline)
+            Text("Adoptive parents must be at least 14 moons older.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var button: some View {
+        let width: CGFloat? = sizeClass == .compact ? .infinity : nil
+        if let selection, cat.adoptiveParents.contains(selection.id) {
+            Button(role: .destructive, action: unadopt) {
+                Text("Unset Adoptive Parent")
+                    .frame(maxWidth: width)
+            }
+            .buttonStyle(.bordered)
+        } else {
+            Button(action: adopt) {
+                Text("Set Adoptive Parent")
+                    .frame(maxWidth: width)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.brown)
+            .disabled(selection == nil)
+        }
     }
 
     private var title: String {

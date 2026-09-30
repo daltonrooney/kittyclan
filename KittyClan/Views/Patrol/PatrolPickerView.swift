@@ -1,9 +1,12 @@
 import SwiftUI
 
 struct PatrolPickerView: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Bindable var patrol: PatrolModel
 
-    private let columns = [GridItem(.adaptive(minimum: 110, maximum: 150), spacing: 12)]
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: sizeClass == .compact ? 96 : 110, maximum: 150), spacing: sizeClass == .compact ? 10 : 12)]
+    }
 
     var body: some View {
         let eligible = patrol.eligible

@@ -3,6 +3,7 @@ import SwiftUI
 struct FoundingNameStep: View {
     @Environment(AppModel.self) private var model
     @Environment(AudioDirector.self) private var audio
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Bindable var founding: FoundingModel
     @FocusState private var isNameFocused: Bool
 
@@ -17,6 +18,7 @@ struct FoundingNameStep: View {
                     .font(.largeTitle.bold())
                 Text("Every Clan needs a name. Type one or roll the dice.")
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
 
             HStack(spacing: 12) {
@@ -32,9 +34,10 @@ struct FoundingNameStep: View {
                         .foregroundStyle(.secondary)
                 }
                 .font(.system(.largeTitle, design: .rounded, weight: .semibold))
-                .padding(.horizontal, 24)
+                .minimumScaleFactor(0.6)
+                .padding(.horizontal, sizeClass == .compact ? 16 : 24)
                 .padding(.vertical, 16)
-                .frame(minWidth: 320)
+                .frame(minWidth: sizeClass == .compact ? nil : 320, maxWidth: sizeClass == .compact ? .infinity : nil)
                 .background(.fill.tertiary, in: .rect(cornerRadius: 20))
                 .onTapGesture { isNameFocused = true }
 

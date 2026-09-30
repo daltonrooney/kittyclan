@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FoundingCatsStep: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let founding: FoundingModel
 
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: 16)]
@@ -32,20 +33,21 @@ struct FoundingCatsStep: View {
             HStack(spacing: 16) {
                 Button(action: founding.reroll) {
                     Label("Reroll (\(founding.rerollsLeft) left)", systemImage: "arrow.triangle.2.circlepath")
-                        .font(.title3.bold())
+                        .font(sizeClass == .compact ? .headline : .title3.bold())
+                        .lineLimit(1)
                 }
                 .buttonStyle(.bordered)
                 .disabled(founding.rerollsLeft == 0)
                 Spacer()
                 Button(action: founding.showBiome) {
                     Label("Next", systemImage: "arrow.right")
-                        .font(.title3.bold())
-                        .padding(.horizontal, 12)
+                        .font(sizeClass == .compact ? .headline : .title3.bold())
+                        .padding(.horizontal, sizeClass == .compact ? 4 : 12)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(!founding.canFound)
             }
-            .controlSize(.extraLarge)
+            .controlSize(sizeClass == .compact ? .large : .extraLarge)
             .padding()
             .background(.bar)
         }

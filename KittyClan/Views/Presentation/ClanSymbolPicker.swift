@@ -4,6 +4,7 @@ import SwiftUI
 /// and every symbol in a grid that can be searched and filtered by kind.
 struct ClanSymbolPicker: View {
     @Environment(AudioDirector.self) private var audio
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Binding var selection: String?
     let recommended: String?
     let random: () -> Void
@@ -42,9 +43,9 @@ struct ClanSymbolPicker: View {
     }
 
     private var chosen: some View {
-        HStack(spacing: 24) {
+        HStack(spacing: sizeClass == .compact ? 16 : 24) {
             ClanSymbolImage(symbol: selection)
-                .frame(width: 128, height: 128)
+                .frame(width: sizeClass == .compact ? 88 : 128, height: sizeClass == .compact ? 88 : 128)
                 .padding(12)
                 .background(.fill.tertiary, in: .rect(cornerRadius: 20))
             VStack(alignment: .leading, spacing: 8) {
@@ -53,20 +54,28 @@ struct ClanSymbolPicker: View {
                     .monospaced()
                 Text("Recommended: \(recommended.flatMap { catalog[$0]?.label } ?? "none for this name")")
                     .foregroundStyle(.secondary)
-                HStack {
-                    if let recommended, recommended != selection {
-                        Button("Use recommended", systemImage: "star") { selection = recommended }
-                    }
-                    Button("Random symbol", systemImage: "dice.fill") {
-                        audio.play(.diceRoll)
-                        random()
-                    }
+                ViewThatFits(in: .horizontal) {
+                    HStack { symbolButtons }
+                    VStack(alignment: .leading) { symbolButtons }
                 }
                 .buttonStyle(.bordered)
             }
             Spacer(minLength: 0)
         }
         .frame(maxWidth: 1000)
+    }
+
+    @ViewBuilder
+    private var symbolButtons: some View {
+        if let recommended, recommended != selection {
+            Button("Use recommended", systemImage: "star") { selection = recommended }
+                .fixedSize()
+        }
+        Button("Random symbol", systemImage: "dice.fill") {
+            audio.play(.diceRoll)
+            random()
+        }
+        .fixedSize()
     }
 
     private var filters: some View {

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CatDetailView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let catID: Cat.ID
 
     @State private var action: CatAction?
@@ -16,7 +17,7 @@ struct CatDetailView: View {
             List {
                 Section {
                     CatProfilePortrait(cat: cat)
-                        .frame(maxWidth: 300)
+                        .frame(maxWidth: sizeClass == .compact ? 240 : 300)
                         .frame(maxWidth: .infinity)
                         .grayscale(cat.isDead && cat.afterlife == nil ? 0.7 : 0)
                         .accessibilityLabel("\(model.displayName(cat)), \(cat.age.label)")

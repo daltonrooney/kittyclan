@@ -63,11 +63,12 @@ struct ClanChooserView: View {
 private struct SavedClanRow: View {
     let summary: SaveSummary
     let isLast: Bool
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: sizeClass == .compact ? 12 : 16) {
             LeaderSprite(appearance: summary.leader)
-                .frame(width: 64, height: 64)
+                .frame(width: sizeClass == .compact ? 52 : 64, height: sizeClass == .compact ? 52 : 64)
                 .background(.fill.tertiary, in: .rect(cornerRadius: 12))
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
@@ -77,20 +78,31 @@ private struct SavedClanRow: View {
                     }
                     Text(summary.name)
                         .font(.title3.bold())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                     if isLast {
                         Text("Last played")
                             .font(.caption.weight(.semibold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(.tint.opacity(0.18), in: .capsule)
+                            .fixedSize()
                     }
                 }
-                HStack(spacing: 14) {
-                    Label("Moon \(summary.moon)", systemImage: "moon.fill")
-                    Label("^[\(summary.living) cat](inflect: true)", systemImage: "pawprint.fill")
-                    Label(summary.season.rawValue, systemImage: summary.season.symbol)
-                    Label(summary.biome.label(camp: summary.camp), systemImage: summary.biome.symbol)
+                Group {
+                    if sizeClass == .compact {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 14) { moonAndCats }
+                            HStack(spacing: 14) { seasonAndHome }
+                        }
+                    } else {
+                        HStack(spacing: 14) {
+                            moonAndCats
+                            seasonAndHome
+                        }
+                    }
                 }
+                .lineLimit(1)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 Text("Played \(summary.savedAt, format: .relative(presentation: .named))")
@@ -104,6 +116,18 @@ private struct SavedClanRow: View {
         .padding(.vertical, 6)
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var moonAndCats: some View {
+        Label("Moon \(summary.moon)", systemImage: "moon.fill")
+        Label("^[\(summary.living) cat](inflect: true)", systemImage: "pawprint.fill")
+    }
+
+    @ViewBuilder
+    private var seasonAndHome: some View {
+        Label(summary.season.rawValue, systemImage: summary.season.symbol)
+        Label(summary.biome.label(camp: summary.camp), systemImage: summary.biome.symbol)
     }
 }
 

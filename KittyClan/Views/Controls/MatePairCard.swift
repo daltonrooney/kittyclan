@@ -3,16 +3,17 @@ import SwiftUI
 /// The cat and the chosen partner side by side, with romance hearts each way and the deciding button.
 struct MatePairCard: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let cat: Cat
     let partner: Cat?
     let decide: () -> Void
 
     var body: some View {
         VStack(spacing: 12) {
-            HStack(alignment: .center, spacing: 20) {
+            HStack(alignment: .center, spacing: isCompact ? 8 : 20) {
                 portrait(cat)
                 hearts
-                    .frame(minWidth: 120)
+                    .frame(minWidth: isCompact ? nil : 120)
                 if let partner {
                     portrait(partner)
                 } else {
@@ -20,7 +21,7 @@ struct MatePairCard: View {
                         Image(systemName: "questionmark.square.dashed")
                             .font(.system(size: 64))
                             .foregroundStyle(.tertiary)
-                            .frame(width: 110, height: 110)
+                            .frame(width: spriteSize, height: spriteSize)
                         Text("Choose a cat")
                             .font(.headline)
                             .foregroundStyle(.secondary)
@@ -76,12 +77,25 @@ struct MatePairCard: View {
     private func portrait(_ cat: Cat) -> some View {
         VStack(spacing: 6) {
             CatSprite(cat: cat)
-                .frame(width: 110)
+                .frame(width: spriteSize)
             Text(model.displayName(cat))
                 .font(.headline)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Text("\(cat.rank.label), \(cat.moonsText)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
         }
+        .frame(maxWidth: isCompact ? 110 : nil)
+    }
+
+    private var isCompact: Bool {
+        sizeClass == .compact
+    }
+
+    private var spriteSize: CGFloat {
+        isCompact ? 84 : 110
     }
 }

@@ -4,6 +4,16 @@ struct PatrolRandomButtons: View {
     let patrol: PatrolModel
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            buttons
+            ScrollView(.horizontal) {
+                buttons
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
+
+    private var buttons: some View {
         HStack(spacing: 10) {
             Button("Random cat", systemImage: "dice", action: addOne)
                 .disabled(patrol.isFull)
@@ -15,6 +25,7 @@ struct PatrolRandomButtons: View {
                 Button("Clear", systemImage: "xmark", role: .destructive, action: patrol.clearSelection)
             }
         }
+        .fixedSize()
         .buttonStyle(.bordered)
         .buttonBorderShape(.capsule)
     }

@@ -2,19 +2,21 @@ import SwiftUI
 
 struct PatrolButton: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         let available = model.patrolEligible.count
         Button(action: model.beginPatrol) {
             HStack(spacing: 8) {
                 Label("Patrol", systemImage: "figure.walk")
-                    .font(.title2.bold())
+                    .font(sizeClass == .compact ? .headline : .title2.bold())
                 Text(available, format: .number)
                     .font(.headline.monospacedDigit())
                     .padding(.horizontal, 8)
                     .padding(.vertical, 2)
                     .background(.white.opacity(0.25), in: .capsule)
             }
+            .frame(maxWidth: sizeClass == .compact ? .infinity : nil)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
         }

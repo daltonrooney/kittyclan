@@ -916,7 +916,7 @@ extension AppModel {
     /// `-mediator YES` makes the first warrior a mediator,
     /// `-foundingStep symbol` opens the symbol picker, and `-symbol ID` sets the open Clan's symbol.
     /// `-sheet mediate|focus|settings|allegiances` opens that sheet (without `-showCat`), and `-chooser YES` shows the Clan chooser.
-    /// The clan screen reads `-clanView camp|list` and `-denLabels YES|NO` straight from its `@AppStorage`.
+    /// `-campZoom SCALE` starts the camp at that scale. The clan screen reads `-clanView camp|list|moons` and `-denLabels YES|NO` straight from its `@AppStorage`.
     func applyDebugLaunchArguments() async {
         let defaults = UserDefaults.standard
         guard let assets else { return }

@@ -84,6 +84,7 @@ struct MentorSheet: View {
 
 private struct MentorChoiceBar: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let apprentice: String
     let mentor: Cat?
     let selection: Cat?
@@ -91,35 +92,64 @@ private struct MentorChoiceBar: View {
     let remove: () -> Void
 
     var body: some View {
-        HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 2) {
-                if let mentor {
-                    Text("Current mentor: \(model.displayName(mentor))")
-                        .font(.headline)
-                    Text("If removed, a new mentor is chosen next moon.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("No mentor")
-                        .font(.headline)
-                        .foregroundStyle(.red)
-                    Text("A new mentor is chosen next moon.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+        Group {
+            if sizeClass == .compact {
+                VStack(alignment: .leading, spacing: 12) {
+                    status
+                    HStack(spacing: 12) {
+                        buttons
+                    }
+                }
+            } else {
+                HStack(spacing: 16) {
+                    status
+                    Spacer()
+                    buttons
                 }
             }
-            Spacer()
-            if mentor != nil {
-                Button("Remove Mentor", role: .destructive, action: remove)
-                    .buttonStyle(.bordered)
-            }
-            Button(saveTitle, action: save)
-                .buttonStyle(.borderedProminent)
-                .tint(.brown)
-                .disabled(selection == nil || selection?.id == mentor?.id || model.isAdvancing)
         }
         .padding()
         .background(.bar)
+    }
+
+    private var status: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if let mentor {
+                Text("Current mentor: \(model.displayName(mentor))")
+                    .font(.headline)
+                Text("If removed, a new mentor is chosen next moon.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("No mentor")
+                    .font(.headline)
+                    .foregroundStyle(.red)
+                Text("A new mentor is chosen next moon.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var buttons: some View {
+        let width: CGFloat? = sizeClass == .compact ? .infinity : nil
+        if mentor != nil {
+            Button(role: .destructive, action: remove) {
+                Text("Remove Mentor")
+                    .frame(maxWidth: width)
+            }
+            .buttonStyle(.bordered)
+        }
+        Button(action: save) {
+            Text(saveTitle)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: width)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(.brown)
+        .disabled(selection == nil || selection?.id == mentor?.id || model.isAdvancing)
     }
 
     private var saveTitle: String {

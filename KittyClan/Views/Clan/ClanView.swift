@@ -4,33 +4,18 @@ struct ClanView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var isShowingLog = false
+    @State private var isShowingCompactLog = Self.startsOnMoons
     @AppStorage("clanView") private var mode = ClanViewMode.camp
     @AppStorage("denLabels") private var showsDenLabels = true
 
     var body: some View {
         @Bindable var model = model
         NavigationStack {
-            VStack(spacing: 0) {
-                ClanHeader(showsLogButton: sizeClass != .regular, showLog: showLog)
-                Divider()
-                GeometryReader { proxy in
-                    if sizeClass != .regular {
-                        mainColumn
-                    } else if mode == .camp && proxy.size.width < proxy.size.height {
-                        VStack(spacing: 0) {
-                            mainColumn
-                                .frame(height: min(proxy.size.height * 0.72, proxy.size.width * 0.875 + 52))
-                            Divider()
-                            MoonLogPanel()
-                        }
-                    } else {
-                        HStack(spacing: 0) {
-                            mainColumn
-                            Divider()
-                            MoonLogPanel()
-                                .frame(width: 360)
-                        }
-                    }
+            Group {
+                if sizeClass == .compact {
+                    compactLayout
+                } else {
+                    regularLayout
                 }
             }
             .background(Color(.systemGroupedBackground))
@@ -78,6 +63,77 @@ struct ClanView: View {
                 Text(model.errorMessage ?? "")
             }
         }
+    }
+
+    private var regularLayout: some View {
+        VStack(spacing: 0) {
+            ClanHeader(showsLogButton: sizeClass != .regular, showLog: showLog)
+            Divider()
+            GeometryReader { proxy in
+                if sizeClass != .regular {
+                    mainColumn
+                } else if mode == .camp && proxy.size.width < proxy.size.height {
+                    VStack(spacing: 0) {
+                        mainColumn
+                            .frame(height: min(proxy.size.height * 0.72, proxy.size.width * 0.875 + 52))
+                        Divider()
+                        MoonLogPanel()
+                    }
+                } else {
+                    HStack(spacing: 0) {
+                        mainColumn
+                        Divider()
+                        MoonLogPanel()
+                            .frame(width: 360)
+                    }
+                }
+            }
+        }
+    }
+
+    private var compactLayout: some View {
+        VStack(spacing: 0) {
+            CompactClanHeader(tab: compactTab)
+            Divider()
+            switch compactTab.wrappedValue {
+            case .camp:
+                CampView()
+                    .overlay(alignment: .top) {
+                        CompactCampBar(showsDenLabels: $showsDenLabels, showCats: showCats)
+                    }
+            case .cats:
+                CatRoster()
+            case .moons:
+                MoonLogPanel()
+            }
+            Divider()
+            CompactClanActions()
+        }
+    }
+
+    private var compactTab: Binding<CompactClanTab> {
+        Binding {
+            isShowingCompactLog ? .moons : mode == .camp ? .camp : .cats
+        } set: { tab in
+            isShowingCompactLog = tab == .moons
+            switch tab {
+            case .camp: mode = .camp
+            case .cats: mode = .list
+            case .moons: break
+            }
+        }
+    }
+
+    private static var startsOnMoons: Bool {
+        #if DEBUG
+        UserDefaults.standard.string(forKey: "clanView") == "moons"
+        #else
+        false
+        #endif
+    }
+
+    private func showCats() {
+        mode = .list
     }
 
     private var mainColumn: some View {

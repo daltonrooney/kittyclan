@@ -1,11 +1,14 @@
 import SwiftUI
 
 struct CatPickerGrid<Cell: View>: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let cats: [Cat]
     let emptyText: String
     @ViewBuilder let cell: (Cat) -> Cell
 
-    private let columns = [GridItem(.adaptive(minimum: 110, maximum: 150), spacing: 12, alignment: .top)]
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: sizeClass == .compact ? 96 : 110, maximum: 150), spacing: sizeClass == .compact ? 10 : 12, alignment: .top)]
+    }
 
     var body: some View {
         if cats.isEmpty {
