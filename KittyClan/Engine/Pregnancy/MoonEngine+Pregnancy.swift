@@ -499,7 +499,7 @@ extension MoonEngine {
                 kit.name = factory.names.generate(for: kit.appearance, using: &rng)
             }
             usedPrefixes.insert(kit.name.prefix)
-            kit.backstory = backstory
+            if let backstory { kit.backstory = backstory }
             kits.append(kit)
         }
         clan.cats += kits
