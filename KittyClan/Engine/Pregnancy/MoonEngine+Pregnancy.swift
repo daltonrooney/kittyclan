@@ -45,7 +45,7 @@ extension MoonEngine {
 
     /// Clangen's `check_if_can_have_kits`, including `check_parent_rank`.
     func canHaveKits(_ cat: Cat?, in clan: Clan) -> Bool {
-        guard let cat, clan.isAlive(cat.id), cat.birthCooldown == 0, !cat.has("recovering from birth"),
+        guard let cat, clan.isAlive(cat.id), !cat.noKits, cat.birthCooldown == 0, !cat.has("recovering from birth"),
               cat.moons >= 15, cat.isMateAge
         else { return false }
         let rankAllows = Self.canHaveKits.contains(cat.rank)
@@ -226,6 +226,7 @@ extension MoonEngine {
         guard let cat = clan[id] else { return [] }
         let backstory = pick(["halfclan2", "outsider_roots2"], &rng)
         let kits = makeLitter(litterSize(for: cat, using: &rng), birthParent: cat, other: nil, backstory: backstory, in: &clan, using: &rng)
+        if let i = clan.index(of: id) { clan.cats[i].nextThought = .onBirth }
         let line = library?.pregnancy.strings["pregnant_secret"] ?? "%{name} brought a %{insert} back to camp, but refused to talk about their origin."
         var pick = StoryPick(template: line.replacing("%{name}", with: "m_c").replacing("%{insert}", with: kitAmount(kits.count)), cats: ["m_c": id])
         pick.groupCats[Self.bornKitsKey] = kits
@@ -500,6 +501,7 @@ extension MoonEngine {
             }
             usedPrefixes.insert(kit.name.prefix)
             if let backstory { kit.backstory = backstory }
+            kit.begin(.born, moon: clan.age)
             kits.append(kit)
         }
         clan.cats += kits
@@ -548,6 +550,7 @@ extension MoonEngine {
         birthParent.name = factory.names.outsiderName(for: social, using: &rng)
         clan.outsiders.append(birthParent)
         clan.sendToAfterlife(birthParent.id, history: nil, using: &rng)
+        if let b = clan.outsiders.firstIndex(where: { $0.id == birthParent.id }) { clan.outsiders[b].nextThought = .halfBloodKitting }
 
         var adoptive = [id, partner]
         for mate in cat.mates + other.mates where clan.isAlive(mate) && !adoptive.contains(mate) { adoptive.append(mate) }
@@ -563,6 +566,7 @@ extension MoonEngine {
             kit.parents = [birthParent.id]
             kit.adoptiveParents = adoptive
             kit.backstory = "abandoned\(Int.random(in: 1...4, using: &rng))"
+            kit.begin(.joined, moon: clan.age)
             kits.append(kit)
         }
         clan.cats += kits

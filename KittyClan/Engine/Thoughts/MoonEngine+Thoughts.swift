@@ -8,6 +8,7 @@ extension MoonEngine {
         var used: Set<String> = []
         func next(for cat: Cat) -> Thought? {
             let kind = cat.nextThought ?? (cat.id == clan.guide ? .isGuide : cat.isDead ? .whileDead : .whileAlive)
+            if kind == .halfBloodKitting, let thought = halfBloodKittingThought(for: cat, in: clan) { return thought }
             return thoughts.thought(kind, for: cat, about: clan[cat.nextThoughtAbout], in: context, used: &used, using: &rng)
                 ?? (kind == .whileAlive || kind == .whileDead ? nil
                     : thoughts.thought(cat.isDead ? .whileDead : .whileAlive, for: cat, in: context, used: &used, using: &rng))
@@ -21,6 +22,13 @@ extension MoonEngine {
             clan.outsiders[i].thought = next(for: clan.outsiders[i])
             clan.outsiders[i].nextThought = nil
         }
+    }
+
+    /// Clangen's `half_blood_kitting_thought`, for however many of the cat's kits there are.
+    func halfBloodKittingThought(for cat: Cat, in clan: Clan) -> Thought? {
+        let kits = clan.cats.count { $0.parents.contains(cat.id) }
+        guard let text = library?.pregnancy.halfBloodKittingThought[kits == 1 ? "one" : "many"] else { return nil }
+        return Thought(text: text)
     }
 
     /// A new thought for one cat right away, e.g. after the player exiles it.

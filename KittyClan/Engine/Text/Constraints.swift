@@ -251,7 +251,8 @@ struct Constraint: Sendable {
             case "high_lives": if !isLeader || !(7...9).contains(lives) { return false }
             case "mid_lives": if !isLeader || !(4...6).contains(lives) { return false }
             case "low_lives": if !isLeader || !(1...3).contains(lives) { return false }
-            case "adoption": if cat.moons <= 14 + 5 { return false }
+            case "adoption":
+                if cat.noKits || cat.moons <= 14 + 5 || cat.mates.contains(where: { clan[$0]?.noKits == true }) { return false }
             default: break
             }
         }

@@ -14,12 +14,20 @@ struct AfterlifeSheet: View {
             AfterlifeGrid(afterlife: model.afterlifeTab, sort: sort, search: search, select: select)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .safeAreaInset(edge: .top) {
-                    Picker("Afterlife", selection: $model.afterlifeTab) {
-                        ForEach(Afterlife.allCases, id: \.self) { afterlife in
-                            Text(afterlife.label).tag(afterlife)
+                    VStack(spacing: 6) {
+                        Picker("Afterlife", selection: $model.afterlifeTab) {
+                            ForEach(Afterlife.allCases, id: \.self) { afterlife in
+                                Text(afterlife.label).tag(afterlife)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        if let temperament = model.temperamentLine(for: model.afterlifeTab) {
+                            Text(temperament)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
                         }
                     }
-                    .pickerStyle(.segmented)
                     .padding(.horizontal)
                     .padding(.vertical, 8)
                     .background(.bar)

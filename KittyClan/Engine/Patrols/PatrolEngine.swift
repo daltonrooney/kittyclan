@@ -489,6 +489,7 @@ struct PatrolEngine: Sendable {
                 if block.changeName || cat.name.suffix.isEmpty && cat.age != .adolescent && !cat.rank.isBaby {
                     cat.name = engine.factory.names.generate(for: cat.appearance, using: &rng)
                 }
+                cat.begin(.joined, moon: clan.age)
                 clan.cats.append(cat)
                 joined.append(cat.id)
                 if cat.rank.isApprentice {

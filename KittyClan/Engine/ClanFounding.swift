@@ -62,6 +62,7 @@ struct ClanFounding: Sendable {
             leader: leader.id,
             deputy: deputy.id
         )
+        for i in clan.cats.indices { clan.cats[i].begin(.founded, moon: clan.age) }
         for cat in clan.living where cat.rank.isApprentice {
             MoonEngine.assignMentor(to: cat.id, in: &clan, using: &rng)
         }

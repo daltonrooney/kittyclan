@@ -105,12 +105,15 @@ struct PregnancyText: Sendable {
     let birth: [String: [String]]
     /// Single strings such as `pregnant_secret` and `mate_claims_kits`, with `%{…}` slots.
     let strings: [String: String]
+    /// `half_blood_kitting_thought`, keyed `one` and `many`.
+    let halfBloodKittingThought: [String: String]
 
     init(_ json: [String: Any], english: [String: Any]) {
         lines = json.compactMapValues { $0 as? [String] }
         litterGuess = (json["litter_guess"] as? [String: Any] ?? [:]).compactMapValues { $0 as? [String] }
         birth = (json["birth"] as? [String: Any] ?? [:]).compactMapValues { $0 as? [String] }
         strings = english.compactMapValues { $0 as? String }
+        halfBloodKittingThought = english["half_blood_kitting_thought"] as? [String: String] ?? [:]
     }
 }
 
