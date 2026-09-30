@@ -389,7 +389,7 @@ final class ClanOptionsTests: XCTestCase {
             XCTAssertEqual(clan.deputy != nil, auto)
             XCTAssertEqual(clan.history.last!.entries.contains { $0.text == "TestClan has no deputy!" }, !auto)
         }
-        XCTAssertFalse(Clan(prefix: "New", cats: []).autoDeputy, "new Clans match Clangen's default")
+        XCTAssertTrue(Clan(prefix: "New", cats: []).autoDeputy, "new Clans name deputies automatically")
         let old = try JSONDecoder().decode(Clan.self, from: Data(#"{"prefix":"Old","cats":[]}"#.utf8))
         XCTAssertTrue(old.autoDeputy, "older saves keep naming deputies")
         XCTAssertTrue(old.assignMentors)

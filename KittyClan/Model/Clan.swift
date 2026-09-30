@@ -135,7 +135,7 @@ struct Clan: Codable, Sendable {
     /// Clangen's `assign_mentors`: apprentices without a mentor get one each moon.
     var assignMentors = true
     /// Clangen's `deputy`: the leader names a new deputy whenever the post is empty.
-    var autoDeputy = false
+    var autoDeputy = true
     /// Clangen's `retirement`: cats never retire because of a permanent condition.
     var noConditionRetirement = false
     /// Clangen's `disasters`: mass-death events can strike the Clan.
@@ -283,7 +283,6 @@ extension Clan {
         firstCousinMates = try c.decodeIfPresent(Bool.self, forKey: .firstCousinMates) ?? false
         twelveMoonGraduation = try c.decodeIfPresent(Bool.self, forKey: .twelveMoonGraduation) ?? false
         assignMentors = try c.decodeIfPresent(Bool.self, forKey: .assignMentors) ?? true
-        // Saves from before this setting always named a deputy.
         autoDeputy = try c.decodeIfPresent(Bool.self, forKey: .autoDeputy) ?? true
         noConditionRetirement = try c.decodeIfPresent(Bool.self, forKey: .noConditionRetirement) ?? false
         disasters = try c.decodeIfPresent(Bool.self, forKey: .disasters) ?? false
