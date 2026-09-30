@@ -286,5 +286,25 @@ extension Clan {
         autoDeputy = try c.decodeIfPresent(Bool.self, forKey: .autoDeputy) ?? true
         noConditionRetirement = try c.decodeIfPresent(Bool.self, forKey: .noConditionRetirement) ?? false
         disasters = try c.decodeIfPresent(Bool.self, forKey: .disasters) ?? false
+        deriveBeginnings()
+    }
+
+    /// Saves without beginnings: Clanborn cats were born `moons` before now (or before they
+    /// died), and founders founded the Clan on moon 0. Other cats' beginnings stay unknown.
+    private mutating func deriveBeginnings() {
+        func derive(_ cat: inout Cat, isOutsider: Bool) {
+            guard cat.beginning == nil, cat.id != guide else { return }
+            let now = cat.isDead ? cat.diedAtClanAge ?? age : age
+            switch cat.origin {
+            case .clanborn where now - cat.moons >= 0:
+                cat.beginning = Beginning(kind: .born, moon: now - cat.moons, age: 0)
+            case .founder where !isOutsider && cat.moons - now >= 0:
+                cat.beginning = Beginning(kind: .founded, moon: 0, age: cat.moons - now)
+            default:
+                break
+            }
+        }
+        for i in cats.indices { derive(&cats[i], isOutsider: false) }
+        for i in outsiders.indices { derive(&outsiders[i], isOutsider: true) }
     }
 }

@@ -52,6 +52,7 @@ extension MoonEngine {
         cat.isExiled = false
         cat.isNear = true
         if cat.otherClan != nil { cat.leftOtherClan = true }
+        cat.begin(.joined, moon: clan.age)
         clan.cats.append(cat)
         var joined = [id]
         let kits = clan.outsiders.filter { $0.isAlive && !$0.isExiled && $0.moons < 12 && $0.allParents.contains(id) }.map(\.id)
@@ -60,6 +61,7 @@ extension MoonEngine {
             var child = clan.outsiders.remove(at: k)
             child.rank = Self.returningRank(for: child)
             child.isLost = false
+            child.begin(.joined, moon: clan.age)
             clan.cats.append(child)
             joined.append(kit)
         }
@@ -381,6 +383,7 @@ extension MoonEngine {
                     cat.skills.secondary?.interestOnly = true
                 }
                 if cat.isAlive { cat.nextThought = .onJoin }
+                cat.begin(.joined, moon: clan.age)
                 clan.cats.append(cat)
                 if cat.rank.isApprentice { Self.assignMentor(to: cat.id, in: &clan, using: &rng) }
             } else {

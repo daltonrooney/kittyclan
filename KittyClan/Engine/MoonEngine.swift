@@ -198,7 +198,7 @@ struct MoonEngine: Sendable {
             return [.becameMediator(id, oldName: oldName)]
         }
 
-        if [.warrior, .deputy].contains(cat.rank), cat.apprentices.isEmpty, cat.moons > 114 {
+        if !cat.noRetire, [.warrior, .deputy].contains(cat.rank), cat.apprentices.isEmpty, cat.moons > 114 {
             let odds = 100 - 0.7 * Double(cat.moons)
             if cat.moons > 140 || odds <= 1 || Double.random(in: 0..<1, using: &rng) < 1 / odds {
                 if clan.deputy == id { clan.deputy = nil }
@@ -363,6 +363,7 @@ struct MoonEngine: Sendable {
             let kits = (0..<count).map { _ in
                 var kit = factory.make(rank: .kitten, moons: moons, origin: .loner, theyThem: clan.theyThemDefault, using: &rng)
                 kit.backstory = Backstories.bundled.random(from: "abandoned_backstories", using: &rng)
+                kit.begin(.joined, moon: clan.age)
                 return kit
             }
             clan.cats += kits
@@ -370,7 +371,8 @@ struct MoonEngine: Sendable {
             return [.litterFound(kits.map(\.id), foundBy: id)]
         }
         let origin: Cat.Origin = kind == "kittypet" ? .kittypet : kind == "rogue" ? .rogue : .loner
-        let joiner = factory.makeJoiner(origin: origin, theyThem: clan.theyThemDefault, using: &rng)
+        var joiner = factory.makeJoiner(origin: origin, theyThem: clan.theyThemDefault, using: &rng)
+        joiner.begin(.joined, moon: clan.age)
         clan.cats.append(joiner)
         rollCongenital(for: joiner.id, odds: 100, in: &clan, using: &rng)
         return [.joined(joiner.id, foundBy: id)]

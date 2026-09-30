@@ -380,7 +380,7 @@ extension MoonEngine {
     }
 
     private func retireForDisability(_ id: UUID, in clan: inout Clan, using rng: inout some RandomNumberGenerator) -> [MoonEvent] {
-        guard !clan.noConditionRetirement, let cat = clan[id], cat.isAlive, [.apprentice, .warrior].contains(cat.rank) else { return [] }
+        guard !clan.noConditionRetirement, let cat = clan[id], cat.isAlive, !cat.noRetire, [.apprentice, .warrior].contains(cat.rank) else { return [] }
         for condition in cat.permanentConditions {
             guard let odds = ConditionLibrary.retirementOdds[condition.severity]?[cat.age], oneIn(odds, &rng) else { continue }
             let text: String

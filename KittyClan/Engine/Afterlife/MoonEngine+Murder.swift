@@ -61,10 +61,7 @@ extension MoonEngine {
         for id in [murdererID, victimID] {
             if let i = clan.index(of: id) { clan.cats[i].murders.append(record) }
         }
-        if let m = clan.index(of: murdererID) {
-            clan.cats[m].starClanAffinity -= 40
-            clan.cats[m].darkForestAffinity += 20
-        }
+        clan.changeAffinity(of: murdererID, starClan: -40, darkForest: 20)
         schedule(pick, in: &clan, using: &rng)
         return applyDeathEvent(pick, cause: .misfortune, in: &clan, using: &rng)
     }

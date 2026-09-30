@@ -47,6 +47,8 @@ struct CatDetailView: View {
                 CatAboutSection(cat: cat, isOutsider: isOutsider)
                 CatActionsSection(cat: cat, open: open)
                     .id(DetailSection.actions)
+                CatPreferencesSection(cat: cat)
+                    .id(DetailSection.preferences)
                 if cat.isDead {
                     CatDeathHistorySection(cat: cat)
                         .id(DetailSection.history)
@@ -119,7 +121,7 @@ struct CatDetailView: View {
     #if DEBUG
     @MainActor private static var didApplyDebugArguments = false
 
-    /// `-detailSection afterlife|history|ceremony|actions|health|family|relationships|lifeStory|exile` scrolls the detail sheet for screenshots;
+    /// `-detailSection afterlife|history|ceremony|actions|preferences|health|family|relationships|lifeStory|exile` scrolls the detail sheet for screenshots;
     /// `-sheet role|mentor|mate|adopt|gender|rename|mediate|kill|family` opens a control once;
     /// `-confirmKill YES`, `-confirmGuideMove YES` and `-confirmAccessories YES` also show those confirmations.
     private func applyDebugArguments(_ proxy: ScrollViewProxy) {

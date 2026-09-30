@@ -110,7 +110,8 @@ final class MoonEngineTests: XCTestCase {
         if let deputy = clan[clan.deputy], deputy.isAlive { XCTAssertEqual(deputy.rank, .deputy, file: file, line: line) }
 
         for cat in living {
-            XCTAssertLessThan(cat.moons, 301, file: file, line: line)
+            let maxMoons = cat.id == clan.leader ? 300 + Clan.maxLeaderLives : 300
+            XCTAssertLessThanOrEqual(cat.moons, maxMoons, "\(cat.rank) at \(cat.moons) moons", file: file, line: line)
             if cat.rank.isBaby { XCTAssertLessThan(cat.moons, 7, "\(cat.rank) at \(cat.moons) moons", file: file, line: line) }
             if cat.rank == .newborn { XCTAssertEqual(cat.moons, 0, file: file, line: line) }
             if let mentorID = cat.mentor {

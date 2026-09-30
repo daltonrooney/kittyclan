@@ -144,6 +144,10 @@ struct Cat: Identifiable, Codable, Hashable, Sendable {
     var previousMates: [UUID] = []
     /// Clangen's `no_mates`: no automatic mates or breakups, and romance only with current mates.
     var noMates = false
+    /// Clangen's `no_kits`: never has, fathers or adopts kits.
+    var noKits = false
+    /// Clangen's `no_retire`: never retires on its own, from age or a lasting condition.
+    var noRetire = false
     var birthCooldown = 0
     var conditions: [CatCondition] = []
 
@@ -158,6 +162,8 @@ struct Cat: Identifiable, Codable, Hashable, Sendable {
     var preventFading = false
     /// A Clangen backstory key, e.g. `clanborn` or `clan_guide3`.
     var backstory: String?
+    /// When the cat was born into, founded or joined the Clan; nil when unknown.
+    var beginning: Beginning?
     var leaderCeremony: [CeremonyLine] = []
     var murders: [MurderRecord] = []
     var thought: Thought?
@@ -202,6 +208,23 @@ struct Cat: Identifiable, Codable, Hashable, Sendable {
     var genderLabel: String { isCis ? sex.rawValue.capitalized : genderAlign.label }
 }
 
+/// Clangen's `history.beginning`: the moon a cat was born into, founded or joined the Clan, and its age then.
+struct Beginning: Codable, Hashable, Sendable {
+    enum Kind: String, Codable, Sendable { case born, founded, joined }
+    var kind: Kind
+    var moon: Int
+    var age: Int
+}
+
+extension Cat {
+    /// Records how the cat came to the Clan, unless it already has a beginning, e.g. a lost
+    /// Clanborn cat coming home.
+    mutating func begin(_ kind: Beginning.Kind, moon: Int) {
+        guard beginning == nil else { return }
+        beginning = Beginning(kind: kind, moon: moon, age: moons)
+    }
+}
+
 extension CatAge {
     init(moons: Int) {
         self = CatAge.allCases.first { $0.moons.contains(moons) } ?? .senior
@@ -242,6 +265,8 @@ extension Cat {
         mates = try c.decodeIfPresent([UUID].self, forKey: .mates) ?? []
         previousMates = try c.decodeIfPresent([UUID].self, forKey: .previousMates) ?? []
         noMates = try c.decodeIfPresent(Bool.self, forKey: .noMates) ?? false
+        noKits = try c.decodeIfPresent(Bool.self, forKey: .noKits) ?? false
+        noRetire = try c.decodeIfPresent(Bool.self, forKey: .noRetire) ?? false
         birthCooldown = try c.decodeIfPresent(Int.self, forKey: .birthCooldown) ?? 0
         conditions = try c.decodeIfPresent([CatCondition].self, forKey: .conditions) ?? []
         isDead = try c.decodeIfPresent(Bool.self, forKey: .isDead) ?? false
@@ -254,6 +279,7 @@ extension Cat {
         darkForestAffinity = try c.decodeIfPresent(Int.self, forKey: .darkForestAffinity) ?? 0
         preventFading = try c.decodeIfPresent(Bool.self, forKey: .preventFading) ?? false
         backstory = try c.decodeIfPresent(String.self, forKey: .backstory)
+        beginning = try c.decodeIfPresent(Beginning.self, forKey: .beginning)
         leaderCeremony = try c.decodeIfPresent([CeremonyLine].self, forKey: .leaderCeremony) ?? []
         murders = try c.decodeIfPresent([MurderRecord].self, forKey: .murders) ?? []
         thought = try c.decodeIfPresent(Thought.self, forKey: .thought)

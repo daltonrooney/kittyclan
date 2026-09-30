@@ -45,7 +45,8 @@ struct AfterlifeText: Sendable {
     }
 
     /// Clangen's `get_backstory_text`: another Clan's cats and outsiders who never lived in the Clan
-    /// are described by who they are now; everyone else by their backstory, then whether they're lost or exiled.
+    /// are described by who they are now; everyone else by their backstory, when a living Clan cat
+    /// arrived, then whether they're lost or exiled.
     func profileBackstory(of cat: Cat, in clan: Clan) -> String {
         let isOutsider = clan.outsiders.contains { $0.id == cat.id }
         var text: String
@@ -61,9 +62,29 @@ struct AfterlifeText: Sendable {
             text = (backstories["unknown"] ?? "%{name}'s past history is unknown.").replacingOccurrences(of: "%{name}", with: "m_c")
         }
         text = text.replacingOccurrences(of: "This cat", with: "m_c")
+        if !isOutsider, cat.isAlive, let line = beginningLine(of: cat) { text += " " + line }
         if isOutsider, cat.isLost { text += " " + (backstories["currently_lost"] ?? "").replacingOccurrences(of: "%{name}", with: "m_c") }
         if isOutsider, cat.isExiled { text += " " + (backstories["currently_exiled"] ?? "").replacingOccurrences(of: "%{name}", with: "m_c") }
         return template.resolve(text.trimmingCharacters(in: .whitespaces), cats: ["m_c": cat], clan: clan)
+    }
+
+    /// Clangen's `beginning_clanborn` / `beginning_cotc`, e.g. "She was born on moon 12 during
+    /// Greenleaf.", with a founding line for the Clan's founders.
+    func beginningLine(of cat: Cat) -> String? {
+        guard let beginning = cat.beginning else { return nil }
+        let age = beginning.age == 1 ? "1 moon" : "\(beginning.age) moons"
+        switch beginning.kind {
+        case .born:
+            return (backstories["beginning_clanborn"] ?? "{PRONOUN/m_c/subject/CAP} {VERB/m_c/were/was} born on moon %{birth_moon} during %{birth_season}.")
+                .replacingOccurrences(of: "%{birth_moon}", with: "\(beginning.moon)")
+                .replacingOccurrences(of: "%{birth_season}", with: Season(moon: beginning.moon).rawValue)
+        case .joined:
+            return (backstories["beginning_cotc"] ?? "{PRONOUN/m_c/subject/CAP} joined the Clan on moon %{moon} at the age of %{join_age}.")
+                .replacingOccurrences(of: "%{moon}", with: "\(beginning.moon)")
+                .replacingOccurrences(of: "%{join_age}", with: age)
+        case .founded:
+            return "{PRONOUN/m_c/subject/CAP} helped found the Clan on moon \(beginning.moon) at the age of \(age)."
+        }
     }
 
     /// Clangen's afterlife acceptance text, shown at the end of a dead cat's history.

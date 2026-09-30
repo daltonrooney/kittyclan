@@ -254,6 +254,8 @@ struct ThoughtLibrary: Sendable {
             keys = ["on_birth/parent"]
         case .onAfterlifeChange:
             keys = ["on_afterlife_change/\(cat.afterlife?.rawValue ?? "starclan")"]
+        case .halfBloodKitting:
+            keys = []
         case .onJoin, .onExile, .onLost, .onGriefTowardBody, .onGriefNoBody:
             keys = ["\(kind.rawValue)/general"]
         }

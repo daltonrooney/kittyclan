@@ -274,6 +274,22 @@ final class AppModel {
         await save()
     }
 
+    /// Clangen's per-cat "Prevent kits" toggle.
+    func setNoKits(_ on: Bool, for id: Cat.ID) async {
+        guard var current = clan, let i = current.index(of: id), !isAdvancing else { return }
+        current.cats[i].noKits = on
+        clan = current
+        await save()
+    }
+
+    /// Clangen's per-cat "Prevent retirement" toggle.
+    func setNoRetire(_ on: Bool, for id: Cat.ID) async {
+        guard var current = clan, let i = current.index(of: id), !isAdvancing else { return }
+        current.cats[i].noRetire = on
+        clan = current
+        await save()
+    }
+
     func mateCandidates(for cat: Cat, singleOnly: Bool, kitsOnly: Bool) -> [Cat] {
         clan?.mateCandidates(for: cat.id, singleOnly: singleOnly, kitsOnly: kitsOnly) ?? []
     }
@@ -479,6 +495,14 @@ final class AppModel {
     func ceremony(of cat: Cat) -> [String] {
         guard let clan else { return [] }
         return assets?.afterlifeText.ceremony(of: cat, in: clan) ?? []
+    }
+
+    /// Clangen's list-screen temper line, e.g. "StarClan is seen as amiable & eager." None for
+    /// the Unknown Residence.
+    func temperamentLine(for afterlife: Afterlife) -> String? {
+        guard let clan, afterlife != .unknownResidence else { return nil }
+        let name = afterlife == .darkForest ? "The Dark Forest" : afterlife.label
+        return "\(name) is seen as \(clan.temper(of: afterlife).words.joined(separator: " & "))."
     }
 
     func fadedCount(in afterlife: Afterlife) -> Int {
@@ -1073,7 +1097,7 @@ extension AppModel {
     private func debugPregnancy() async {
         guard let request = UserDefaults.standard.string(forKey: "pregnant"), let assets, var current = clan,
               let queen = current.living.first(where: {
-                  $0.sex == .female && $0.moons >= 15 && MoonEngine.canHaveKits.contains($0.rank)
+                  $0.sex == .female && $0.moons >= 15 && !$0.noKits && MoonEngine.canHaveKits.contains($0.rank)
                       && !$0.isNotWorking && current.pregnancies[$0.id] == nil
               })
         else { return }
