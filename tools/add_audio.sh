@@ -1,6 +1,5 @@
 #!/bin/sh
 # Copies ClanGen's music, ambience and sound effects into KittyClan/Resources/Audio as AAC.
-# The audio has no stated licence, so the converted files are git-ignored and only go into local builds.
 # Usage: tools/add_audio.sh /path/to/clangen
 set -eu
 CLANGEN="${1:?usage: tools/add_audio.sh /path/to/clangen}"

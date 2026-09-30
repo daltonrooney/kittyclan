@@ -69,6 +69,6 @@ KittyClan is based on ClanGen by the ClanGen team.
 
 - Code is licensed under the Mozilla Public License 2.0.
 - Cat sprites, camp art, symbols and other art come from ClanGen and are licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). KittyClan must not be sold or used commercially.
-- ClanGen's music (composed by Sharon Hurvitz and Carl-Isaak Krulewitch), ambience and sounds aren't in this repository, because their licence isn't stated. To include them in a local build, run `tools/add_audio.sh /path/to/clangen`, which converts them to AAC in `KittyClan/Resources/Audio` (git-ignored).
+- ClanGen's music (composed by Sharon Hurvitz and Carl-Isaak Krulewitch), ambience and sounds are included under the same terms as ClanGen's other assets. `tools/add_audio.sh /path/to/clangen` re-converts them to AAC in `KittyClan/Resources/Audio`.
 
 See [LICENSE.md](LICENSE.md).

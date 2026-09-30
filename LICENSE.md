@@ -4,6 +4,8 @@ All CODE in this project is licensed under the Mozilla Public License Version 2.
 
 All SPRITES, ART and ICONS in this project come from ClanGen and are licensed under the Creative Commons Attribution-NonCommercial 4.0 International License (https://creativecommons.org/licenses/by-nc/4.0/). They may not be used for commercial purposes.
 
+The music, ambience and sound effects come from ClanGen (music composed by Sharon Hurvitz and Carl-Isaak Krulewitch) and are used under the same terms as ClanGen's other assets.
+
 Text and game data exported from ClanGen into KittyClan/Resources remain under their ClanGen licences.
 
 
