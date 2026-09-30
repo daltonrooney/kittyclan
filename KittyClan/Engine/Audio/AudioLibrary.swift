@@ -76,14 +76,25 @@ struct AudioLibrary: Sendable {
     func ambienceBase(for scene: AudioScene) -> [String] {
         switch scene {
         case .menu: menuAmbience
-        case let .clan(biome, _, _): ambienceBase[biome.key] ?? []
+        case let .clan(biome, _, _): ambienceBase[Self.ambienceKey(biome)] ?? []
+        }
+    }
+
+    /// Clangen has no Wetlands or Desert ambience; they borrow the nearest biome's.
+    private static func ambienceKey(_ biome: Biome) -> String {
+        switch biome {
+        case .wetlands: Biome.beach.key
+        case .desert: Biome.plains.key
+        default: biome.key
         }
     }
 
     /// Short sounds for the camp, e.g. waves at Lakeside, played now and then over the base.
+    /// Borrowed camps keep the sounds of the camp whose art they use.
     func campOverlays(biome: Biome, camp: Int) -> [String] {
-        guard biome.campNames.indices.contains(camp - 1) else { return [] }
-        return overlays[biome.campNames[camp - 1].lowercased().replacing(" ", with: "_")] ?? []
+        let source = CampLibrary.artSource(biome: biome, camp: camp)
+        guard source.biome.campNames.indices.contains(source.camp - 1) else { return [] }
+        return overlays[source.biome.campNames[source.camp - 1].lowercased().replacing(" ", with: "_")] ?? []
     }
 
     func seasonOverlays(_ season: Season) -> [String] {

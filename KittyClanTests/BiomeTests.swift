@@ -58,6 +58,86 @@ final class BiomeTests: XCTestCase {
         }
     }
 
+    func testEveryBiomeLoadsItsOwnEvents() throws {
+        let library = try XCTUnwrap(engine.library)
+        let text = try XCTUnwrap(Bundle.main.url(forResource: "Text", withExtension: nil))
+        for biome in Biome.allCases {
+            for type in ["death", "injury", "misc", "new_cat"] {
+                let data = try Data(contentsOf: text.appending(path: "\(type)/\(biome.key).json"))
+                let ids = (try JSONSerialization.jsonObject(with: data) as? [[String: Any]] ?? []).compactMap { $0["event_id"] as? String }
+                let loaded = ids.filter(library.eventIDs.contains)
+                XCTAssertFalse(loaded.isEmpty, "\(biome) \(type)")
+                print("\(biome) \(type): \(loaded.count) of \(ids.count) events load")
+            }
+        }
+    }
+
+    func testWetlandsAndDesertBorrowCampArt() {
+        let camps = Self.assets.camps
+        let pairs: [(Biome, Int, Biome, Int)] = [
+            (.wetlands, 1, .plains, 3), (.wetlands, 2, .beach, 1), (.wetlands, 3, .forest, 4), (.wetlands, 4, .mountainous, 3),
+            (.desert, 1, .mountainous, 1), (.desert, 2, .plains, 2), (.desert, 3, .mountainous, 4), (.desert, 4, .plains, 4),
+        ]
+        for (biome, camp, source, sourceCamp) in pairs {
+            XCTAssertEqual(
+                camps.background(biome: biome, camp: camp, season: .leafFall, dark: true),
+                camps.background(biome: source, camp: sourceCamp, season: .leafFall, dark: true)
+            )
+            XCTAssertEqual(camps.layout(biome: biome, camp: camp)?.labels, camps.layout(biome: source, camp: sourceCamp)?.labels)
+        }
+        XCTAssertEqual(Biome.wetlands.campNames.count, 4)
+        XCTAssertEqual(Biome.desert.campNames.count, 4)
+        XCTAssertEqual(Biome(rawValue: "Wetlands"), .wetlands)
+        XCTAssertEqual(Biome(rawValue: "Desert"), .desert)
+    }
+
+    func testUntaggedDesertPatrolsStayInTheDesert() throws {
+        let patrols = Self.assets.patrols.library
+        let folder = try XCTUnwrap(Bundle.main.url(forResource: "Text", withExtension: nil)).appending(path: "patrols/desert")
+        var untagged: Set<String> = []
+        for case let url as URL in FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil)! where url.pathExtension == "json" {
+            let list = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [[String: Any]] ?? []
+            untagged.formUnion(list.filter { ($0["location"] as? [String] ?? []).isEmpty }.compactMap { $0["event_id"] as? String })
+        }
+        XCTAssertEqual(untagged.count, 7)
+        var seen: Set<String> = []
+        for type in PatrolType.allCases {
+            for season in Season.allCases {
+                for biome in Biome.allCases {
+                    let found = patrols.patrols(for: type, season: season, biome: biome).filter { untagged.contains($0.id) }
+                    if biome == .desert {
+                        seen.formUnion(found.map(\.id))
+                        for patrol in found { XCTAssertEqual(patrol.location, ["desert"], patrol.id) }
+                    } else {
+                        XCTAssertTrue(found.isEmpty, "\(biome): \(found.map(\.id))")
+                    }
+                }
+            }
+        }
+        XCTAssertFalse(seen.isEmpty)
+    }
+
+    func testBorrowedHerbsPlatformsAndPrey() throws {
+        let herbs = try XCTUnwrap(engine.herbLibrary)
+        for herb in herbs.herbs {
+            for season in Season.allCases {
+                XCTAssertEqual(herb.rarity(in: .wetlands, season), herb.rarity(in: .beach, season))
+                XCTAssertEqual(herb.rarity(in: .desert, season), herb.rarity(in: .plains, season))
+            }
+        }
+        for biome in Biome.allCases {
+            _ = ProfilePlatform(biome: biome, season: .greenleaf, nest: false, afterlife: nil, dark: false)
+        }
+        let prey = Self.assets.patrols.library.prey
+        for abbr in ["w_tp_dl_s", "w_mp_dl_p", "w_mp_a_p", "d_tp_s", "d_mp_p", "d_bp_p"] {
+            XCTAssertFalse(prey[abbr, default: []].isEmpty, abbr)
+        }
+        XCTAssertNotEqual(prey["w_mp_dl_p"], prey["w_mp_dl_s"], "the plural list is plural")
+        let audio = AudioLibrary.bundled
+        XCTAssertEqual(audio.campOverlays(biome: .wetlands, camp: 3), audio.campOverlays(biome: .forest, camp: 4))
+        XCTAssertEqual(audio.ambienceBase(for: .clan(biome: .desert, camp: 1, season: .newleaf)), audio.ambienceBase(for: .clan(biome: .plains, camp: 1, season: .newleaf)))
+    }
+
     func testBiomeEventsStayInTheirBiome() {
         let forestOnly = ["forest"]
         XCTAssertTrue(Constraint.locationAllows(forestOnly, biome: .forest, camp: 3))
@@ -68,7 +148,7 @@ final class BiomeTests: XCTestCase {
 
     func testEachBiomeRunsWithPatrolsAndResolvedText() throws {
         for (index, biome) in Biome.allCases.enumerated() {
-            var (clan, rng) = clan(biome, camp: index + 1, seed: UInt64(10 + index))
+            var (clan, rng) = clan(biome, camp: index % 4 + 1, seed: UInt64(10 + index))
             for moon in 0..<30 {
                 if moon % 2 == 0 {
                     let cats = PatrolEngine.eligible(in: clan).prefix(3).map(\.id)

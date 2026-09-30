@@ -43,7 +43,8 @@ struct PatrolEngine: Sendable {
         var mountainous = forest
         mountainous[.leafFall] = [2, 6, 4, 2, 1]
         let beach: [Season: [Int]] = [.newleaf: [2, 5, 5, 2, 1], .greenleaf: [2, 5, 5, 2, 1], .leafFall: [2, 5, 5, 2, 1], .leafBare: [2, 6, 4, 2, 1]]
-        return [.forest: forest, .mountainous: mountainous, .plains: forest, .beach: beach]
+        let desert: [Season: [Int]] = [.newleaf: [2, 6, 4, 2, 1], .greenleaf: [3, 6, 4, 2, 0], .leafFall: [2, 5, 5, 2, 1], .leafBare: [1, 3, 6, 4, 2]]
+        return [.forest: forest, .mountainous: mountainous, .plains: forest, .beach: beach, .wetlands: beach, .desert: desert]
     }()
     private static let preySizes = ["tiny", "small", "medium", "large", "huge"]
 

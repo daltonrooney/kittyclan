@@ -904,7 +904,7 @@ extension AppModel {
     /// `-patrolResult YES` (proceeds to the result), `-war YES` (starts a war with the first neighbour),
     /// `-outsiders YES` (exiles and loses a warrior if there are few outsiders, and expands the list),
     /// `-leaderDen clans|outsiders` (opens the leader's den), `-leaderDenPlan YES` (queues a choice for each tab),
-    /// `-biome forest|mountainous|plains|beach` and `-camp 1…4` (the biome and camp for `-autofound` or the founding flow),
+    /// `-biome forest|mountainous|plains|beach|wetlands|desert` and `-camp 1…4` (the biome and camp for `-autofound` or the founding flow),
     /// `-foundingStep biome|camp` (any `-foundingStep` starts a new Clan if one is open),
     /// `-deaths N` (sends N living warriors, apprentices or elders to the afterlife),
     /// `-afterlife YES|starclan|dark_forest|unknown_residence` (opens the afterlife), `-afterlifeSort rank|death|name`,

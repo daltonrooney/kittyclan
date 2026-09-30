@@ -7,6 +7,8 @@ extension Biome {
         case .mountainous: "mountain.2.fill"
         case .plains: "sun.horizon.fill"
         case .beach: "beach.umbrella.fill"
+        case .wetlands: "drop.fill"
+        case .desert: "sun.dust.fill"
         }
     }
 
@@ -16,6 +18,8 @@ extension Biome {
         case .mountainous: "Rocky peaks, hidden caves and bitter winters."
         case .plains: "Open grassland under a wide sky, with nowhere to hide."
         case .beach: "Sand, tide pools and the endless roar of the sea."
+        case .wetlands: "Reed beds, still water and soft mud that hides every paw print."
+        case .desert: "Scorching sun, cold nights and prey that is hard to come by."
         }
     }
 

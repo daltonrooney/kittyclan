@@ -23,7 +23,8 @@ from PIL import Image
 CLANGEN = Path(sys.argv[1]).resolve()
 OUT = Path(__file__).resolve().parent.parent / "KittyClan" / "Resources" / "Sprites"
 DICTS = CLANGEN / "sprites" / "dicts"
-BIOMES = ["forest", "mountainous", "plains", "beach"]
+BIOMES = ["forest", "mountainous", "plains", "beach", "wetlands", "desert"]
+CAMPLESS_BIOMES = {"wetlands", "desert"}
 
 SHEETS = [
     "lineart", "heterochromiamask", "eyes", "pelt_parts_masks", "skin",
@@ -268,6 +269,7 @@ def export_text():
     prefixes = tuple(biome[0] + "_" for biome in BIOMES)
     abbreviations = {k: v for k, v in prey["abbreviations"].items() if k.startswith(prefixes)}
     abbreviations["b_mp_dl_p"] = "beach_midprey_dryland_plural"
+    abbreviations["w_mp_dl_p"] = "wetlands_midprey_dryland_plural"
     (text / "patrols").mkdir(parents=True, exist_ok=True)
     with open(text / "patrols" / "prey.json", "w", encoding="utf-8") as f:
         json.dump({abbr: prey[key] for abbr, key in abbreviations.items() if key in prey}, f, ensure_ascii=False)
@@ -291,7 +293,7 @@ def export_camps():
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
-    for biome in BIOMES:
+    for biome in (b for b in BIOMES if b not in CAMPLESS_BIOMES):
         (out / biome).mkdir()
         for png in sorted((CLANGEN / "resources" / "images" / "camp_bg" / biome).glob("*.png")):
             shutil.copy(png, out / biome / png.name)

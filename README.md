@@ -14,7 +14,7 @@ A native iPad game about raising a Clan of forest cats, built in Swift and Swift
 
 ## What's in the game
 
-- **Founding:** choose the leader, deputy, medicine cat and members from generated cats, then pick a biome (forest, mountains, plains or beach), a camp and a Clan symbol.
+- **Founding:** choose the leader, deputy, medicine cat and members from generated cats, then pick one of six biomes (forest, mountains, plains, beach, wetlands or desert), a camp and a Clan symbol. ClanGen has no camp art for wetlands or desert, so their camps reuse other biomes' camp art under their own names.
 - **Moons:** each timeskip ages the Clan and runs ClanGen's events: births, deaths, ceremonies, illness and injury, relationships and mates, new arrivals, war with neighbouring Clans, disasters (optional) and murder (optional).
 - **Cats:** sprites are rendered pixel-for-pixel from ClanGen's sprite sheets. Each cat has a personality, skills, a backstory, thoughts, a gender identity and pronoun sets, conditions and a family tree.
 - **The Clan:** patrols, the fresh-kill pile and herb stores, the leader's den, the warriors' den focus, mediation and allegiances.

@@ -353,17 +353,22 @@ struct PatrolLibrary: @unchecked Sendable {
     private let artDirectory: URL?
 
     init(directory: URL, artDirectory: URL?) throws {
-        func load(_ path: String) -> [PatrolEvent] {
+        /// A biome folder's untagged patrols stay in that biome, as its untagged events do.
+        func load(_ path: String, biome: Biome? = nil) -> [PatrolEvent] {
             guard let data = try? Data(contentsOf: directory.appending(path: "patrols/\(path)")),
                   let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
             else { return [] }
-            return list.compactMap(PatrolEvent.init)
+            return list.compactMap { json in
+                var json = json
+                if let biome, (json["location"] as? [String] ?? ["any"]).contains("any") { json["location"] = [biome.key] }
+                return PatrolEvent(json)
+            }
         }
         var patrols: [String: [PatrolEvent]] = [:]
         for type in PatrolType.allCases {
             for biome in Biome.allCases {
                 for season in Season.allCases.map({ $0.rawValue.lowercased() }) + ["any"] {
-                    patrols["\(biome.key)/\(type.folder)/\(season)"] = load("\(biome.key)/\(type.folder)/\(season).json")
+                    patrols["\(biome.key)/\(type.folder)/\(season)"] = load("\(biome.key)/\(type.folder)/\(season).json", biome: biome)
                 }
             }
             patrols["\(type.folder)/general"] = load("general/\(type.folder).json")

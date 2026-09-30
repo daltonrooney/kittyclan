@@ -47,6 +47,17 @@ struct CampLibrary: Sendable {
     private let byBiome: [Biome: [Int: CampLayout]]
     private let directory: URL
 
+    /// Clangen draws no camps for Wetlands or Desert, so their camps reuse other biomes' art and layouts
+    /// under their own names. Returns the biome and camp whose art a camp is drawn with.
+    static func artSource(biome: Biome, camp: Int) -> (biome: Biome, camp: Int) {
+        let borrowed: [(Biome, Int)] = switch biome {
+        case .wetlands: [(.plains, 3), (.beach, 1), (.forest, 4), (.mountainous, 3)]
+        case .desert: [(.mountainous, 1), (.plains, 2), (.mountainous, 4), (.plains, 4)]
+        default: []
+        }
+        return borrowed.indices.contains(camp - 1) ? borrowed[camp - 1] : (biome, camp)
+    }
+
     init(directory: URL) throws {
         self.directory = directory
         let json = try JSONSerialization.jsonObject(with: Data(contentsOf: directory.appending(path: "layouts.json"))) as? [String: [String: Any]] ?? [:]
@@ -54,7 +65,8 @@ struct CampLibrary: Sendable {
         var byBiome: [Biome: [Int: CampLayout]] = [:]
         for biome in Biome.allCases {
             for camp in 1...4 {
-                byBiome[biome, default: [:]][camp] = json["\(biome.rawValue)camp\(camp)"].flatMap(CampLayout.init) ?? fallback
+                let source = Self.artSource(biome: biome, camp: camp)
+                byBiome[biome, default: [:]][camp] = json["\(source.biome.rawValue)camp\(source.camp)"].flatMap(CampLayout.init) ?? fallback
             }
         }
         self.byBiome = byBiome
@@ -73,7 +85,8 @@ struct CampLibrary: Sendable {
     /// The background for a camp in a season, light or dark.
     func background(biome: Biome, camp: Int, season: Season, dark: Bool) -> URL {
         let seasonKey = season.rawValue.lowercased().replacingOccurrences(of: "-", with: "")
-        return directory.appending(path: "\(biome.key)/\(seasonKey)_camp\(camp)_\(dark ? "dark" : "light").png")
+        let source = Self.artSource(biome: biome, camp: camp)
+        return directory.appending(path: "\(source.biome.key)/\(seasonKey)_camp\(source.camp)_\(dark ? "dark" : "light").png")
     }
 
     /// Clangen's `choose_cat_positions`: each spot holds up to two cats, dens are chosen by

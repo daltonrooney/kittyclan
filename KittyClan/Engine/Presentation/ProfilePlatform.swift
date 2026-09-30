@@ -24,7 +24,7 @@ struct ProfilePlatform: Hashable, Sendable {
             }
             column = place + offset
         } else {
-            row = Self.rows.firstIndex(of: nest ? "nest" : biome.key)!
+            row = Self.rows.firstIndex(of: nest ? "nest" : Self.platformKey(biome))!
             let place = switch season {
             case .greenleaf: 0
             case .leafBare: 2
@@ -32,6 +32,15 @@ struct ProfilePlatform: Hashable, Sendable {
             case .newleaf: 6
             }
             column = place + offset
+        }
+    }
+
+    /// `platforms.png` has no Wetlands or Desert row: wetlands stand in the plains' reeds, desert on mountain rock.
+    private static func platformKey(_ biome: Biome) -> String {
+        switch biome {
+        case .wetlands: Biome.plains.key
+        case .desert: Biome.mountainous.key
+        default: biome.key
         }
     }
 

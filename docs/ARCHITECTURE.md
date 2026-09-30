@@ -53,7 +53,7 @@ Randomness always comes from an explicit `inout some RandomNumberGenerator`, so 
 
 ClanGen's text is data, not code, and KittyClan reads the same files.
 - **`EventLibrary`** loads ceremonies and short events (death, misc, injury, new cat, accessory, murder, mass death). It drops, at load time, any event that needs something KittyClan can't evaluate. That keeps the pools honest, and tests count what loads.
-- **`Constraint`** evaluates ClanGen's involved-cat filters: status, age, trait, skill, backstory, group, past status, experience, relationships and tags. `Constraint.locationAllows` applies biome and camp rules.
+- **`Constraint`** evaluates ClanGen's involved-cat filters: status, age, trait, skill, backstory, group, past status, experience, relationships and tags. `Constraint.locationAllows` applies biome and camp rules for the six biomes (`Biome`: forest, mountainous, plains, beach, wetlands and desert). Wetlands and desert have no herb rarities in ClanGen, so they use beach's and plains' respectively.
 - **`TextTemplate`** resolves `{PRONOUN}`, `{VERB}` and `{ADJ}` tags, cat abbreviations (`m_c`, `r_c`, `mur_c`, `n_c:0`…), Clan names, snippet lists and places.
 - **`ClangenNarrator`** turns `MoonEvent`s into log entries.
 - **`ThoughtLibrary`** picks each cat's thought.
@@ -76,7 +76,7 @@ Text that names cats is stored as a template plus cat IDs and resolved when show
 `tools/export_assets.py` reads a ClanGen checkout and writes:
 - `Resources/Sprites`: sprite sheets as `.rgba`, `index.json` (flattened sprite tables, because Swift's JSON decoding doesn't keep key order), pelt recipes and names.
 - `Resources/Text`: event, patrol, thought, condition, herb, snippet, place and pronoun JSON. English files are unwrapped from `{"en": …}`.
-- `Resources/Camps`: camp backgrounds for each biome and season, plus layouts.
+- `Resources/Camps`: camp backgrounds for each biome and season, plus layouts. Wetlands and desert have no art of their own: `CampLibrary.artSource` maps each of their four camps to another biome's camp, whose background, layout and ambience it uses.
 - `Resources/PatrolArt`, `Resources/Afterlife` and `Resources/Presentation`: art the game references.
 - `Resources/Audio`: playlists only (see the README).
 

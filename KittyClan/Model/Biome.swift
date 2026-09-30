@@ -2,7 +2,7 @@ import Foundation
 
 /// Where the Clan lives. Raw values are Clangen's save strings.
 enum Biome: String, Codable, CaseIterable, Sendable {
-    case forest = "Forest", mountainous = "Mountainous", plains = "Plains", beach = "Beach"
+    case forest = "Forest", mountainous = "Mountainous", plains = "Plains", beach = "Beach", wetlands = "Wetlands", desert = "Desert"
 
     /// Folder, file and location-tag name, e.g. "mountainous".
     var key: String { rawValue.lowercased() }
@@ -14,6 +14,8 @@ enum Biome: String, Codable, CaseIterable, Sendable {
         case .mountainous: ["Cliff", "Cavern", "Crystal River", "Ruins"]
         case .plains: ["Grasslands", "Tunnels", "Wastelands", "Bridge"]
         case .beach: ["Tidepools", "Tidal Cave", "Shipwreck", "Fjord"]
+        case .wetlands: ["Marsh", "Tidepools", "Lakeshore", "Crystal Springs"]
+        case .desert: ["Mesa", "Burrows", "Ruins", "Old Bridge"]
         }
     }
 }

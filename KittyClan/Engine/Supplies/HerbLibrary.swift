@@ -8,8 +8,14 @@ struct HerbLibrary: Sendable {
         /// 1-in-N odds of finding it on a gathering attempt, by biome key and season (0 = none).
         let rarity: [String: [String: Int]]
 
+        /// Clangen gives Wetlands and Desert no rarities, so they borrow beach's and plains'.
         func rarity(in biome: Biome, _ season: Season) -> Int {
-            rarity[biome.key]?[season.rawValue.lowercased()] ?? 0
+            let key = switch biome {
+            case .wetlands: Biome.beach.key
+            case .desert: Biome.plains.key
+            default: biome.key
+            }
+            return rarity[key]?[season.rawValue.lowercased()] ?? 0
         }
     }
 
